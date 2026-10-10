@@ -3,8 +3,12 @@
 #
 # The shape, and why:
 #
-#   * It fires ONLY when terraform/ changes (path filter) or when run by hand.
-#     Nothing else in the repository touches the infrastructure it describes.
+#   * On main it fires ONLY when terraform/ changes (path filter) or when run by
+#     hand: nothing else in the repository touches the infrastructure it
+#     describes. EVERY pull request runs it (2026-10-09): `plan` is a required
+#     check on main (terraform/github.tf's ruleset), and a check a path filter
+#     skips never reports — the PR would wait at "Expected" for ever. On a PR
+#     it is fmt + offline validate, seconds.
 #   * `plan` runs for pushes to main (and by hand). A pull request gets fmt +
 #     offline validate and NO credentials — a PR's HCL is evaluated by plan, and
 #     a data source in it could read the tokens. `apply` runs only for a push to
@@ -41,10 +45,6 @@ name: Terraform
 
 on:
   pull_request:
-    paths:
-      - 'terraform/**'
-      - '.github/workflows/terraform.yml'
-      - 'scripts/tf_plan_summary.py'
   push:
     branches: [main]
     paths:
@@ -65,10 +65,12 @@ on:
 permissions:
   contents: read
 
-# One Terraform at a time, and never cancel one mid-apply.
+# One Terraform at a time, and never cancel one mid-apply. A pull request's
+# fmt + validate touches no state and is its own group: it must never queue
+# behind an apply that waits days for its reviewer.
 concurrency:
-  group: terraform
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('terraform-pr-{0}', github.ref) || 'terraform' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # the private shelf's read-only deploy key, public half (see terraform/variables.tf)
@@ -195,7 +197,8 @@ jobs:
   ask:
     # GitHub tells no one of their own activity, and every run here is the
     # owner's, so the gate's wait never reached them: the bot asks by name in
-    # an "Approval needed" issue (scripts/ci_ask_review.sh). Same needs and same
+    # an "Approval needed" issue (scripts/ci_ask_review.sh), and the merged pull
+    # request's pipeline report shows the wait in its thread. Same needs and same
     # condition as the gate; `settle` closes the issue when the gate is done.
     needs: plan
     if: >-
@@ -207,7 +210,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      issues: write     # the "Approval needed" issue, nothing else
+      issues: write          # the "Approval needed" issue
+      pull-requests: write   # the pull request's report shows the wait
       actions: read
     outputs:
       issue: ${{ steps.ask.outputs.issue }}
@@ -215,7 +219,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: scripts/ci_ask_review.sh
+          sparse-checkout: |
+            scripts/ci_ask_review.sh
+            scripts/ci_pr_report.py
           sparse-checkout-cone-mode: false
 
       - name: Ask the reviewer
@@ -233,13 +239,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      issues: write     # the issue's outcome and its close, nothing else
+      issues: write          # the issue's outcome and its close
+      pull-requests: write   # the pull request's report shows the outcome
       actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: scripts/ci_ask_review.sh
+          sparse-checkout: |
+            scripts/ci_ask_review.sh
+            scripts/ci_pr_report.py
           sparse-checkout-cone-mode: false
 
       - name: Settle the ask

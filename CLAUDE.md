@@ -1,39 +1,39 @@
 # CLAUDE.md
 
-Guidance for agents working in this repository: the website **merecatholicity.com**, its
-Cloudflare backend, and the build/deploy system. This file is the **rulebook and the map**, kept
-short on purpose (`tests/py/test_claude_md.py` holds it to 280 lines and every bullet to six). The
-long-form reference — every design decision and postmortem since July 2026 — is the dated log
-under **`docs/architecture/log/`**, indexed by `docs/architecture/INFRASTRUCTURE.md`: before
-changing a subsystem, read its passage. The other documents: `docs/architecture/CICD.md` (**how
-work ships** — read before deploying, changing infra or touching a secret),
-`docs/architecture/CODEBASE.md` (the code map and reading order), `README.md` (the operating
-manual: prerequisites, targets, recipes), `comments-worker/API.md` (the wire contract), `librarian/README.md`,
-`tests/README.md`, `terraform/README.md`. If `CONTEXT_DUMP.txt` is present in the root and you
-work on text content, ingest it first.
+Guidance for agents working in this repository: the website **merecatholicity.com**, its Cloudflare backend, and
+the build/deploy system. This file is the **rulebook and the map**, kept short on purpose
+(`tests/py/test_claude_md.py` holds it to 280 lines and every bullet to six). The long-form reference — every
+design decision and postmortem since July 2026 — is the dated log under **`docs/architecture/log/`**, indexed by
+`docs/architecture/INFRASTRUCTURE.md`: before changing a subsystem, read its passage. The other documents:
+`docs/architecture/CICD.md` (**how work ships** — read before deploying, changing infra or touching a secret),
+`docs/architecture/CODEBASE.md` (the code map and reading order), `README.md` (the operating manual:
+prerequisites, targets, recipes), `comments-worker/API.md` (the wire contract), `librarian/README.md`,
+`tests/README.md`, `terraform/README.md`. If `CONTEXT_DUMP.txt` is present in the root and you work on text
+content, ingest it first.
 
-**Keep the documents current in the same change**: this file for rules; the log for the why (a
-dated passage with a bold lead-in appended to `docs/architecture/log/<this month>.md`, then
-`scripts/infra_index.py --write`); CICD.md when a workflow, secret or make target it names
-changes; CODEBASE.md when module structure changes; README when the human story changes.
+**Keep the documents current in the same change**: this file for rules; the log for the why (a dated passage
+with a bold lead-in appended to `docs/architecture/log/<this month>.md`, then `scripts/infra_index.py --write`);
+CICD.md when a workflow, secret or make target it names changes; CODEBASE.md when module structure changes;
+README when the human story changes.
 
 ## Standing authorization, and the only road
 
-The owner has granted standing permission to ship — commit, push, deploy, apply migrations,
-purge — as often as the work needs, **without asking each time**. Do not end a turn asking
-"want me to push/deploy?". Two exceptions: commit attribution follows the harness's
+The owner has granted standing permission to ship — commit, push a branch, merge its pull request,
+deploy, apply migrations, purge — as often as the work needs, **without asking each time**. Do not end
+a turn asking "want me to push/deploy?". Two exceptions: commit attribution follows the harness's
 instruction only; give a heads-up before destructive or irreversible acts beyond a normal
 deploy (dropping a database, force-pushing history, deleting a bucket, revoking a credential).
 
 **Two agents never share a checkout** (2026-09-16). The second works in its own worktree —
-`scripts/agent_worktree.sh <name>` makes `local/wt/<name>` on `origin/main` (git-ignored,
-`node_modules` shared, its own `purescript/output`) — commits and pushes FROM it, and the
-shared checkout is only ever fast-forwarded. A migration ships in the same commit as the
-worker that reads it; otherwise it goes on a branch.
+`scripts/agent_worktree.sh <name>` makes `local/wt/<name>` on `origin/main` (git-ignored, `node_modules` shared,
+its own `purescript/output`) — commits in it and ships FROM it with `scripts/ship.sh`; the shared checkout is
+only ever fast-forwarded. A migration ships in the pull request of the worker that reads it.
 
-**Since 2026-09-09 the push IS the deploy for everything.** The rules (procedure in CICD.md):
+**The MERGE is the deploy for everything** (since 2026-10-09; from 09-09 the push was). The rules (CICD.md):
 
-1. `main` is production. A branch or pull request gets the gates without the deploy.
+1. **`main` takes no direct push** (the `main` ruleset in `terraform/github.tf`, no bypass): every change is a
+   pull request, merged only when `build`, `check` and `plan` pass. Ship with `scripts/ship.sh` (branch → PR →
+   auto-merge → wait); the PR's one bot comment (`ci_pr_report.py`) reports its checks, its deploy, a gate's wait.
 2. Before any commit: `make tests` must pass; `make jscheck` after any worker/client JS/TS edit.
 3. **CI is the build of record** — the site artifact, the worker bundle and the PDFs in R2 are
    what the runner built. Local builds preview and run gates; their bytes do not ship. A local
@@ -43,16 +43,17 @@ worker that reads it; otherwise it goes on a branch.
    (the cache once shipped the previous commit's hand files — 2026-09-09).
 4. **No secret is ever present on a `pull_request` event**, in any workflow.
 5. **Infrastructure is declared, never clicked.** Cloudflare and GitHub settings live in
-   `terraform/`; a change is a push; the apply waits on the `terraform-production` gate.
+   `terraform/`; a change is a pull request; the apply waits on the `terraform-production` gate.
    Review the plan summary, then `scripts/ci_approve.sh <run-id> --approve "why"` (a human
    presses *Review deployments*). Anything made by hand gets an `import` block in the same
    change, or a written exception.
 6. **Never a destroy or replace from CI** — the plan fails on any delete; only a
    `workflow_dispatch` with `allow_destroy=true` gets past, deliberately.
-7. **Workers ship on push** (`workers.yml`: gates → D1 ledger → `wrangler deploy`); so does the
-   librarian's shelf (`merecat.yml`; `make librarian` is the hand road). `make worker-deploy` is
+7. **Workers ship on merge** when anything they are built from changed since their last deploy
+   (`ci_scope.py`: the kernel, the purs pin, the writings they whitelist) — gates → D1 ledger → `wrangler
+   deploy`; so does the librarian's shelf (`merecat.yml`; `make librarian` the hand road). `make worker-deploy` is
    the emergency road; `wrangler secret put` the only home for worker secrets. **Rollback** (`make
-   worker-rollback`, then `git revert` + push) and **staged rollout** (`workflow_dispatch`
+   worker-rollback`, then a `git revert` shipped as a PR) and **staged rollout** (`workflow_dispatch`
    `mode=stage|promote`) are CICD §12; `ops-watch.yml` asks the worker daily how it is.
 8. **Never hand-edit or commit the generated half of `docs/`**; never bump a `?v=` by hand
    (the build stamps them, preserving mtimes so a stamp never hides a source change from
@@ -65,9 +66,8 @@ worker that reads it; otherwise it goes on a branch.
 11. **Verify, don't assume**: `gh run list --limit 6`; `terraform -chdir=terraform plan` → *No
     changes*; `python3 scripts/publish_pdfs.py --check`; `curl -s "…/version.json?probe=$RANDOM"`.
 
-Credentials live in `~/.config/merecatholicity/ci.env` (mode 600, outside the repo) and in the
-Actions secrets — never in any committed file. The identity hashes and Turnstile sitekeys in
-the repo are public by design.
+Credentials live in `~/.config/merecatholicity/ci.env` (mode 600, outside the repo) and in the Actions secrets —
+never in any committed file. The identity hashes and Turnstile sitekeys in the repo are public by design.
 
 ## Repository layout
 

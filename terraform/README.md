@@ -55,10 +55,12 @@ expected fingerprint). `plan` answers `No changes`.
 *The full procedure — plan, review, approve, adopt-by-import, the drift check — is
 `docs/architecture/CICD.md` §3 and §5. This is the summary.*
 
-`.github/workflows/terraform.yml` fires only when `terraform/**` changes (or by
-hand). `plan` runs on pull requests and pushes; `apply` runs from `main` and
-waits on the **`terraform-production`** environment, whose required reviewer is
-the owner. Approve in the browser (*Review deployments*) or from a shell with
+`.github/workflows/terraform.yml` runs on every pull request (`fmt` + offline
+`validate`: its `plan` job is one of the three checks the `main` ruleset requires)
+and, on `main`, when a merge changes `terraform/**` (or by hand). `apply` runs
+from `main` and waits on the **`terraform-production`** environment, whose
+required reviewer is the owner. Approve in the browser (*Review deployments* —
+the merged pull request's pipeline report links it) or from a shell with
 `scripts/ci_approve.sh <run-id> --approve` — the same API call.
 
 Three things the workflow will not do, on purpose:
@@ -111,7 +113,7 @@ Cloudflare account token, and one GitHub PAT:
 **No pull request ever sees a secret**, not even from this repository: a PR's
 HCL is what `plan` evaluates, and an `http` or `external` data source in it
 would read the tokens at plan time, before any gate. PRs get `fmt` and an
-offline `validate`; the plan that gets reviewed is the push's.
+offline `validate`; the plan that gets reviewed is the merge's.
 
 **Bootstrap order, because it matters:** a workflow that names an environment
 GitHub has never seen makes GitHub create it — with no protection rules. The

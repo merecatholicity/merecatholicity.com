@@ -54,10 +54,37 @@ jobs:
           # its merge base, which the fetch below resolves.
           fetch-depth: 0
 
+      # WHICH COMMIT'S BUILD THE SITE CACHE HOLDS (2026-10-09) — the diff below
+      # starts there, not at the previous push. This workflow cancels a run when
+      # a newer one starts, so after a burst of merges the cache can be several
+      # commits behind HEAD; diffing from `before` then left out the cancelled
+      # commits' changes, and since every source is flattened to an old mtime
+      # while the cached pages keep their build time, make took those pages for
+      # fresh and the site shipped them stale (their PDFs unpublished). The
+      # cache key names its commit (site-2-<sha>), so the diff from it is
+      # exactly what the cache lacks. lookup-only: nothing is downloaded here;
+      # the restore further down is the real one, with the same keys.
+      - name: Which commit's build does the site cache hold?
+        id: cached
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: docs
+          key: site-2-${{ github.sha }}
+          restore-keys: site-2-
+          lookup-only: true
+
       - name: Work out what actually changed
         id: changed
+        env:
+          CACHED: ${{ steps.cached.outputs.cache-matched-key }}
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          cached="${CACHED#site-2-}"
+          if [ -n "$cached" ] && git cat-file -e "$cached^{commit}" 2>/dev/null; then
+            # (a pull request's own cache names a merge commit no longer
+            # fetched; it falls through to the PR's base, as before)
+            base="$cached"
+            echo "diffing against the build the site cache holds: $cached"
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
             base="${{ github.event.pull_request.base.sha }}"
           else
             base="${{ github.event.before }}"
