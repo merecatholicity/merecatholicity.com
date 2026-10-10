@@ -1703,9 +1703,13 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
    used #title-block-header which the old mobile-only .home-title rule never
    matched). Visually HIDE it (not display:none) so each document keeps one real
    H1 in the a11y tree — the chrome title is a div, not a heading. Scoped to
-   body.mc-app, so ?app=0 (no shell) still shows the article title. */
+   body.mc-app, so ?app=0 (no shell) still shows the article title. Hidden
+   from the first frame wherever the shell is coming (html:not(.mc-noapp)): a
+   title that painted and then left moved every line below it (2026-10-10). */
 body.mc-app main.prose > .home-title,
-body.mc-app main.prose > #title-block-header {
+body.mc-app main.prose > #title-block-header,
+html:not(.mc-noapp) body:not(.mc-app) main.prose > .home-title,
+html:not(.mc-noapp) body:not(.mc-app) main.prose > #title-block-header {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
 }
@@ -2337,6 +2341,32 @@ body.mc-app > footer { display: none; }
   }
 }
 
+/* ---- The same first paint on a desktop (2026-10-10) ------------------------
+   The phone's promise was never made here, and the desktop paid for it in
+   layout shift: body.mc-app pads the content clear of the fixed deskbar and the
+   left rail, so the frame app.js landed, everything on the screen slid 2.4rem
+   down and 13.5rem right, and the page title stepped out from above it.
+   Lighthouse's desktop run measured CLS 0.200 on Home (Performance 91, against
+   the phone's 100 and CLS 0). So before the shell stands the body already holds
+   the bars' lanes, the deskbar's surface holds its place (an empty box, as on
+   the phone), and the static footer waits; the page title's rule is the shell's
+   own (search "P2-b"). The rail's lane is the reader's choice — a collapsed rail
+   is remembered as mc-sidebar=icons, which nav.js marks as html.mc-sb-icons at
+   once, as it marks mc-noapp. Same gate: the ?app=0 reader keeps the plain site. */
+@media (min-width: 601px) {
+  html:not(.mc-noapp) body:not(.mc-app) {
+    padding-top: calc(var(--mc-deskbar-h) + 0.4rem);
+    padding-left: calc(var(--mc-sidebar-w) + 1.5rem);
+  }
+  html.mc-sb-icons:not(.mc-noapp) body:not(.mc-app) { padding-left: calc(var(--mc-sidebar-min) + 1.5rem); }
+  html:not(.mc-noapp) body:not(.mc-app)::after {
+    content: ''; position: fixed; top: 0; left: 0; right: 0; z-index: 45; height: var(--mc-deskbar-h);
+    background: var(--glass); border-bottom: 1px solid var(--rule); box-shadow: var(--shadow-1);
+    pointer-events: none;
+  }
+  html:not(.mc-noapp) body:not(.mc-app) > footer { display: none; }
+}
+
 @media (min-width: 601px) {
   :root { --mc-deskbar-h: 3.25rem; }
 
@@ -2416,8 +2446,9 @@ body.mc-app > footer { display: none; }
   .mc-db-menu .mc-set-switch.on .mc-set-knob { transform: translateX(1.1rem); }
 
   /* keep the corner light/dark toggle out of the fixed bar's way (logged-out
-     readers reach theme here; logged-in also have it in the account menu) */
-  body.mc-app .theme-toggle { top: auto; bottom: 1rem; }
+     readers reach theme here; logged-in also have it in the account menu) —
+     from the first frame the shell is coming, or it jumps corners when it lands */
+  html:not(.mc-noapp) .theme-toggle { top: auto; bottom: 1rem; }
 
   /* ---- fat buttons + real hover ---- */
   .btn, .btn-send, .btn-anon {
@@ -2543,7 +2574,10 @@ html.mc-home-boot main.prose > :not(mc-home) { display: none; }
    same card vocabulary fills the width. This also makes the desktop void vanish
    on Home by itself. Mobile keeps the single-column stack. */
 @media (min-width: 992px) {
-  main.mc-app-home .mc-home { max-width: none; }
+  /* every state that shows the launcher at all (the head script's mc-home-boot,
+     the shell, mountHome's mark) lays it out the same, or the grid reflows
+     under the reader when the shell lands (CLS, 2026-10-10) */
+  .mc-home { max-width: none; }
   .mc-home-feats { display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: 0.8rem; align-items: stretch; }
   .mc-home-shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: 0.4rem 0.8rem; }
   /* rows in the grid drop the full-width bottom rule (it read as a divider across

@@ -370,6 +370,10 @@ window.mcAsset = function (name: string) {
        reader no shell is coming, so the plain page must stay plain. */
     try {
       if (localStorage.getItem('mc-app') === '0') document.documentElement.classList.add('mc-noapp');
+      /* and on a desktop the same dress holds the left rail's lane, whose width
+         is the reader's choice (2026-10-10): a collapsed rail reserves the
+         narrow lane, or the content slides left when the rail lands. */
+      if (localStorage.getItem('mc-sidebar') === 'icons') document.documentElement.classList.add('mc-sb-icons');
     } catch (e) { /* storage blocked: the shell mounts, so the app dress is right */ }
     /* The BARS FIRST (2026-09-17): docs/chrome.js is the app bar and the tab
        bar and nothing else — a couple of hundred bytes plus a ~22 KB shared

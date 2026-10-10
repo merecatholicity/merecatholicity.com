@@ -504,5 +504,55 @@ class PreShellPaint(unittest.TestCase):
         self.assertRegex(self.nav, r"localStorage\.getItem\('mc-app'\) === '0'\) document\.documentElement\.classList\.add\('mc-noapp'\)")
 
 
+class DesktopPreShellPaint(unittest.TestCase):
+    """The same first paint on a desktop (2026-10-10).
+
+    What breaks silently: layout shift. body.mc-app pads the content clear of
+    the fixed deskbar and the left rail, and when nothing held those lanes
+    before the shell, every line on the screen slid down and right the frame
+    app.js landed. Nothing looked broken to a person on a fast machine;
+    Lighthouse's desktop run measured CLS 0.200 on Home and scored 91. Each rule
+    below is one thing that moved."""
+
+    def setUp(self):
+        self.css = read(BUILT)
+        self.nav = read(ROOT / "pagejs" / "nav.ts")
+
+    def test_the_body_holds_the_bars_lanes_before_the_shell(self):
+        lanes = re.search(r"html:not\(\.mc-noapp\) body:not\(\.mc-app\)\{([^}]*)}", self.css)
+        self.assertIsNotNone(lanes, "the pre-shell body must reserve the bars' lanes")
+        self.assertIn("padding-top:calc(var(--mc-deskbar-h) + .4rem)", lanes.group(1),
+                      "the same headroom body.mc-app gives the deskbar")
+        self.assertIn("padding-left:calc(var(--mc-sidebar-w) + 1.5rem)", lanes.group(1),
+                      "the same lane body.mc-app.mc-sb-wide gives the rail (the default)")
+        self.assertIn("body.mc-app{padding-top:calc(var(--mc-deskbar-h) + .4rem)}", self.css,
+                      "and that is the shell's own headroom; change one, change both")
+        self.assertIn("body.mc-app.mc-sb-wide{padding-left:calc(var(--mc-sidebar-w) + 1.5rem)}", self.css,
+                      "and the shell's own lane")
+
+    def test_a_collapsed_rail_is_marked_before_the_shell(self):
+        self.assertRegex(self.css, r"html\.mc-sb-icons:not\(\.mc-noapp\) body:not\(\.mc-app\)\{padding-left:calc\(var\(--mc-sidebar-min\) \+ 1\.5rem\)}")
+        self.assertRegex(self.nav, r"localStorage\.getItem\('mc-sidebar'\) === 'icons'\) document\.documentElement\.classList\.add\('mc-sb-icons'\)",
+                         "nav.js marks the collapsed rail at once, as it marks mc-noapp")
+
+    def test_the_deskbar_surface_holds_its_place(self):
+        bar = re.search(r"html:not\(\.mc-noapp\) body:not\(\.mc-app\):after\{([^}]*)}", self.css)
+        self.assertIsNotNone(bar)
+        self.assertIn("position:fixed", bar.group(1))
+        self.assertIn("height:var(--mc-deskbar-h)", bar.group(1))
+        self.assertIn("pointer-events:none", bar.group(1), "a placeholder must never take a press")
+        self.assertRegex(bar.group(1), r"content:(''|\"\")", "an empty box, as on the phone")
+
+    def test_the_title_and_toggle_are_where_the_shell_puts_them(self):
+        self.assertRegex(self.css, r"html:not\(\.mc-noapp\) body:not\(\.mc-app\) main\.prose>\.home-title[^{]*\{clip:",
+                         "the title is visually hidden from the first frame, as the shell hides it")
+        self.assertIn("html:not(.mc-noapp) .theme-toggle{top:auto;bottom:1rem}", self.css,
+                      "the toggle sits in its shell corner from the start, or it jumps when the shell lands")
+
+    def test_the_home_launcher_is_one_width_in_every_state(self):
+        self.assertRegex(self.css, r"@media \(min-width:992px\)\{\.mc-home\{max-width:none}",
+                         "keyed on main.mc-app-home, the grid reflowed under the reader when mountHome ran")
+
+
 if __name__ == "__main__":
     unittest.main()
