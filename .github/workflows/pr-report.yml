@@ -16,6 +16,11 @@
 #
 # The list below is every workflow a pull request or a merge runs;
 # tests/py/test_pipeline_workflows.py holds it to that.
+#
+# By hand: `gh workflow run pr-report.yml -f pr=<n>` re-renders one pull
+# request's report from main's code (a re-run of an old report run would
+# replay that run's commit, old script and all). The job refuses a dispatch
+# from any other ref, so the write token never runs a branch's script.
 
 name: PR report
 
@@ -23,6 +28,11 @@ on:
   workflow_run:
     workflows: [Build, Workers, Terraform, merecat]
     types: [requested, completed]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: 'The pull request whose report to re-render (its number)'
+        required: true
 
 permissions: {}
 
@@ -30,11 +40,12 @@ permissions: {}
 # creating the comment at once would make two. A newer run replaces a pending
 # one, which is harmless — every run renders everything.
 concurrency:
-  group: pr-report-${{ github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_sha }}
+  group: pr-report-${{ github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_sha || inputs.pr }}
   cancel-in-progress: false
 
 jobs:
   report:
+    if: github.event_name == 'workflow_run' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -52,4 +63,12 @@ jobs:
       - name: Report on the pull request
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/ci_pr_report.py --event "$GITHUB_EVENT_PATH"
+          PR: ${{ inputs.pr }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            # a dispatcher's text: a number, or nothing at all reaches the script
+            case "$PR" in ''|*[!0-9]*) echo "::error::pr takes a pull request's number"; exit 1 ;; esac
+            python3 scripts/ci_pr_report.py --pr "$PR"
+          else
+            python3 scripts/ci_pr_report.py --event "$GITHUB_EVENT_PATH"
+          fi

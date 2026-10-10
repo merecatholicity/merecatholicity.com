@@ -150,6 +150,45 @@ class TheComment(unittest.TestCase):
         self.assertLessEqual(len(body), r.BODY_CHARS + 200)
 
 
+class TheLag(unittest.TestCase):
+    """A run's `completed` event can arrive before the runs API stops calling it
+    in progress; the merge's last run was reported "running" for good (2026-10-09)."""
+
+    def fake_api(self, statuses):
+        """The runs API answering each call with the next status for run 7."""
+        calls = []
+        def gh(path, *a, **kw):
+            calls.append(path)
+            st = statuses[min(len(calls), len(statuses)) - 1]
+            return {'workflow_runs': [{'id': 7, 'status': st, 'conclusion': None if st != 'completed' else 'success'},
+                                      {'id': 8, 'status': 'completed', 'conclusion': 'success'}]}
+        old = r.gh
+        r.gh = gh
+        self.addCleanup(setattr, r, 'gh', old)
+        return calls
+
+    TRIGGER = {'id': 7, 'head_sha': 'abc', 'status': 'completed', 'conclusion': 'failure', 'updated_at': 'T',
+               'name': 'merecat', 'workflow_id': 3, 'run_number': 9, 'event': 'push', 'html_url': 'u'}
+
+    def test_the_api_is_asked_again_until_it_agrees(self):
+        calls = self.fake_api(['in_progress', 'in_progress', 'completed'])
+        runs = r.runs_for('abc', self.TRIGGER, pause=0)
+        self.assertEqual(len(calls), 3)
+        self.assertEqual([x['status'] for x in runs if x['id'] == 7], ['completed'])
+
+    def test_the_payload_wins_when_the_api_never_does(self):
+        self.fake_api(['in_progress'])
+        (mine,) = [x for x in r.runs_for('abc', self.TRIGGER, tries=3, pause=0) if x['id'] == 7]
+        self.assertEqual((mine['status'], mine['conclusion']), ('completed', 'failure'))
+
+    def test_a_requested_event_or_another_commit_is_never_waited_for(self):
+        calls = self.fake_api(['in_progress'])
+        r.runs_for('abc', dict(self.TRIGGER, status='requested'), pause=0)
+        r.runs_for('other-sha', self.TRIGGER, pause=0)
+        r.runs_for('abc', None, pause=0)
+        self.assertEqual(len(calls), 3, 'one call each: only a completed event on this commit waits')
+
+
 class TheRuns(unittest.TestCase):
     def test_the_newest_run_of_each_workflow_on_the_event(self):
         runs = [
