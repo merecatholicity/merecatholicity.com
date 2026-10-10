@@ -92,6 +92,7 @@ on page one.)
 - **Never block what Cloudflare injects: the script directives report, the script-free ones are enforced (2026-10-09)** — `log/2026-10.md`
 - **Home is painted by its HTML, and nothing of the app races the first frame: mobile PageSpeed 96 → 100 (2026-10-09)** — `log/2026-10.md`
 - **A volume no longer split takes its old parts with it (2026-10-09)** — `log/2026-10.md`
+- **The desktop's first paint is the app too: desktop PageSpeed 91 (CLS 0.200) (2026-10-10)** — `log/2026-10.md`
 
 ### Build system
 
