@@ -40,8 +40,6 @@ export const REKEY_COLS: ReadonlyArray<readonly [string, string]> = [
   ['profiles', 'hash'],
   ['comments', 'author_hash'],
   ['wall_posts', 'author_hash'], ['wall_comments', 'author_hash'],
-  /* the two frozen like tables (the reactions ledger replaced them; 0018 drops
-     them) are read by nothing and hold no live rows, so nothing to move. */
   ['reactions', 'author_hash'],
   ['bans', 'hash'], ['trusted', 'hash'], ['locks', 'hash'], ['shadowbans', 'hash'], ['shadowbans', 'added_by'],
   ['admins', 'hash'], ['admins', 'added_by'], ['discord_hooks', 'created_by'],
@@ -52,7 +50,9 @@ export const REKEY_COLS: ReadonlyArray<readonly [string, string]> = [
   ['dms', 'sender_hash'], ['dms', 'saved_by'],
   ['dm_blocks', 'owner_hash'], ['dm_blocks', 'blocked_hash'],
   ['dm_members', 'hash'], ['dm_members', 'added_by'], ['dm_reactions', 'hash'],
-  ['dm_threads', 'created_by'], ['dm_threads', 'last_sender'], ['dm_threads', 'a_hash'], ['dm_threads', 'b_hash'],
+  ['dm_threads', 'created_by'], ['dm_threads', 'last_sender'],
+  /* dm_threads.a_hash / b_hash are not moved: unread since 0016, unwritten
+     since 0019, and dropped by the migration after it (2026-10-17). */
 ];
 
 /* The member's own sealed keys, each with the SENDER's published pubkey, so the

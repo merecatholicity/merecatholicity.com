@@ -20,47 +20,15 @@
   "where": "comments-worker/src/lib.ts",
   "pattern": "\\(\\?4 > 0 OR actor_hash = \\?2\\)",
   "since": "2026-09-14",
-  "due": "2026-10-16",
-  "how": "once no unread bell with topic_id 0 remains, drop this clause and the two `topic_id = 0 AND actor_hash` clauses in routes/dm.ts; tests/worker/notif_read"
+  "due": "2026-11-16",
+  "how": "once no unread bell with topic_id 0 remains, drop this clause and the two `topic_id = 0 AND actor_hash` clauses in routes/dm.ts; tests/worker/notif_read — moved from 2026-10-16 on 2026-10-17: two unread pre-0016 DM bells (topic_id 0) still stood in production, and this clause is what clears them when their conversation is read; retire it once none remains (or once they are marked read)."
  },
  {
-  "what": "dm_threads.a_read_at / b_read_at / a_cleared_at / b_cleared_at — pair columns nothing reads (a_hash/b_hash are still written by ensurePairThread)",
+  "what": "dm_threads.a_hash / b_hash and dm_media.msg_id — the three legacy columns 0019 stopped writing but could not drop, because the worker it replaced still wrote them during the deploy",
   "where": "comments-worker/schema.sql",
-  "pattern": "a_read_at    INTEGER",
-  "since": "2026-09-14",
-  "due": "2026-10-14",
-  "how": "migration 0018 retire_pair_columns — owner heads-up and a fresh daily backup first: drop dm_threads_ab_idx, stop writing a_hash/b_hash, DROP COLUMN ×6; make schema-snapshot"
- },
- {
-  "what": "dms.react_a / react_b / liked_a / liked_b — the pair reaction columns the reactions ledger replaced (0012)",
-  "where": "comments-worker/schema.sql",
-  "pattern": "ALTER TABLE dms ADD COLUMN react_a TEXT",
-  "since": "2026-09-12",
-  "due": "2026-10-14",
-  "how": "the same 0018 migration: DROP COLUMN ×4; make schema-snapshot"
- },
- {
-  "what": "dm_media.msg_id and its index — retired by dm_media_refs (an object dies with its last reference)",
-  "where": "comments-worker/schema.sql",
-  "pattern": "dm_media_msg_idx",
-  "since": "2026-09-13",
-  "due": "2026-10-14",
-  "how": "the same 0018 migration: DROP INDEX dm_media_msg_idx, DROP COLUMN msg_id; make schema-snapshot"
- },
- {
-  "what": "wall_likes and wall_comment_likes — frozen since the reactions ledger (0014's backfill read them once)",
-  "where": "comments-worker/schema.sql",
-  "pattern": "CREATE TABLE IF NOT EXISTS wall_likes",
-  "since": "2026-09-12",
-  "due": "2026-10-14",
-  "how": "the same 0018 migration: DROP TABLE ×2 (nothing reads them; the ledger holds every like as a ❤️ reaction); make schema-snapshot"
- },
- {
-  "what": "the legacy card strip in inject_social.py — the unfenced \"A primary source…\" block a cached pages tree still carries",
-  "where": "scripts/inject_social.py",
-  "pattern": "def legacy_card\\(",
-  "since": "2026-09-17",
-  "due": "2026-10-17",
-  "how": "once every site cache has turned over (a cold rebuild, or a month of builds), drop legacy_card(), its caller in main(), the `shimmed` counter and test_social_cards.py's byte-for-byte test; the fence is then the only road"
+  "pattern": "a_hash       TEXT,      -- legacy, unread after 0016",
+  "since": "2026-10-17",
+  "due": "2026-10-24",
+  "how": "migration 0020 retire_legacy_writes, once 0019's worker is the one deployed: ALTER TABLE dm_threads DROP COLUMN a_hash, b_hash; ALTER TABLE dm_media DROP COLUMN msg_id; make schema-snapshot; then drop this entry (tests/worker/migration_0019.test.ts already holds that nothing names them)."
  }
 ]
