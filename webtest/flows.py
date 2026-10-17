@@ -202,14 +202,16 @@ class Flow:
           t.focus(); t.value=%s; t.dispatchEvent(new Event('input',{bubbles:true})); return true;"""
                        % (json.dumps(sel), json.dumps(text)))
 
-    def wait(self, js_pred, timeout=20, every=1.0):
-        """js_pred: a JS expression string returning truthy when ready."""
+    def wait(self, js_pred, timeout=20, every=1.0, quiet=False):
+        """js_pred: a JS expression string returning truthy when ready.
+        quiet: the caller writes its own FAIL line, one that says what it saw."""
         t0 = time.time()
         while time.time() - t0 < timeout:
             if self.js('return !!(%s);' % js_pred):
                 return True
             time.sleep(every)
-        self.failures.append('wait: timeout on %s' % js_pred[:80])
+        if not quiet:
+            self.failures.append('wait: timeout on %s' % js_pred[:80])
         return False
 
     def drain(self):

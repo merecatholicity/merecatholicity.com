@@ -32,6 +32,19 @@ BIBLE = ['kjv.html#genesis-1', 'kjv.html#psalms-119', 'kjv.html#job-3', 'kjv.htm
          'kjv.html#1-chronicles-1', 'douay-rheims.html#genesis-1', 'douay-rheims.html#psalms-118']
 URLS = [p + '.html' for p in HAND + CORPUS] + BIBLE
 
+# What a Bible page that painted no verse was doing, for the FAIL line: the
+# reader's own words (still "Loading the text…", or "Could not load…") and
+# the text's fetch as the browser timed it — the night's report then names a
+# slow download, a failed one, or a reader that never asked (2026-10-15).
+BIBLE_SEEN = r"""
+var m = document.getElementById('bible-reader');
+var said = m ? (m.querySelector('.bible-loading') || m).textContent.slice(0, 40) : 'no mount';
+var got = performance.getEntriesByType('resource').filter(function (e) { return /\/(kjv|dr)\.json/.test(e.name); })
+  .map(function (e) { return e.name.split('/').pop() + ' ' + Math.round(e.duration) + ' ms ' +
+    (e.encodedBodySize ? Math.round(e.encodedBodySize / 1024) + ' KiB' : '(size unknown)'); });
+return 'reader says ' + JSON.stringify(said) + ', text fetch: ' + (got.join('; ') || 'none finished');
+"""
+
 PROBE = r"""
 var w = document.documentElement.clientWidth;
 var sw = Math.max(document.documentElement.scrollWidth, document.body ? document.body.scrollWidth : 0);
@@ -72,8 +85,9 @@ def main():
                 if f.js("return document.readyState === 'complete';"):
                     break
                 time.sleep(0.15)
-            if '#' in u:
-                f.wait("document.querySelectorAll('.bible-verse').length > 0", timeout=10, every=0.25)
+            if '#' in u and not f.wait("document.querySelectorAll('.bible-verse').length > 0",
+                                       timeout=10, every=0.25, quiet=True):
+                f.failures.append('%s: no verse after 10 s, %s' % (u, f.js(BIBLE_SEEN)))
             time.sleep(0.5)
             try:
                 d = json.loads(f.js(PROBE))

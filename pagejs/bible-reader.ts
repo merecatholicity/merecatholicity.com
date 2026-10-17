@@ -148,7 +148,13 @@
 
     mount.textContent = "";
     mount.appendChild(el("p", "bible-loading", "Loading the text…"));
-    fetch(JSON_URL).then(function (r) { return r.json(); }).then(function (d) {
+    /* The STAMPED address (window.mcAsset, nav.js), the one the Scripture
+       hover asks for too: a content-keyed URL is what the edge and the
+       browser may hold (terraform/cache.tf). Bare, the 4 MB text went to
+       GitHub Pages on every visit, uncached at the edge (Cloudflare caches no
+       .json by default) — the nightly's verse timeouts of 2026-10-15. */
+    var src = window.mcAsset ? window.mcAsset(JSON_URL) : JSON_URL;
+    fetch(src).then(function (r) { return r.json(); }).then(function (d) {
       if (sig.aborted) return;
       data = d;
       d.books.forEach(function (b: Book, i: number) { slugIdx[b.slug] = i; });
