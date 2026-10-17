@@ -34,7 +34,7 @@ function seedAnn(db: DatabaseSync) {
   db.prepare("INSERT INTO reactions (target, target_id, author_hash, emoji, created_at) VALUES ('post', 1, ?, '❤️', 5)").run(ann.hash);
   db.prepare("INSERT INTO bookmarks (hash, kind, ref, created_at) VALUES (?, 'topic', '1', 5)").run(ann.hash);
   const pk = 'ann|' + bob.hash; const [a, b] = [ann.hash, bob.hash].sort(); const pair = a + '|' + b;
-  db.prepare("INSERT INTO dm_threads (id, kind, pair_key, created_at, last_at, last_sender, msgs, a_hash, b_hash) VALUES (7, 0, ?, 1, 2, ?, 1, ?, ?)").run(pair, ann.hash, a, b);
+  db.prepare("INSERT INTO dm_threads (id, kind, pair_key, created_at, last_at, last_sender, msgs) VALUES (7, 0, ?, 1, 2, ?, 1)").run(pair, ann.hash);
   db.prepare("INSERT INTO dm_members (thread_id, hash, joined_at) VALUES (7, ?, 1), (7, ?, 1)").run(ann.hash, bob.hash);
   db.prepare("INSERT INTO dms (id, thread_id, sender_hash, body, enc, created_at) VALUES (9, 7, ?, 'E3.x', 3, 2)").run(ann.hash);
   db.prepare("INSERT INTO dm_keys (msg_id, hash, sealed) VALUES (9, ?, 'oldsealedforann'), (9, ?, 'oldsealedforbob')").run(ann.hash, bob.hash);

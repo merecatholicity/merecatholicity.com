@@ -59,10 +59,9 @@ function seeded() {
   return db;
 }
 const reactions = (db: DatabaseSync, id: number) => db.prepare('SELECT hash, emoji FROM dm_reactions WHERE msg_id = ? ORDER BY hash').all(id).map((r: Row) => [who[r.hash], r.emoji]);
-const pairCols = (db: DatabaseSync, id: number) => ({ ...db.prepare('SELECT react_a, react_b, liked_a, liked_b FROM dms WHERE id = ?').get(id) });
 
-test('the ledger builds through 0012 and dms carries one reaction column per side', () => {
-  const { db, files } = ledgerUpTo();
+test('the ledger builds through 0012 and dms carries one reaction column per side (until 0019 retires them)', () => {
+  const { db, files } = ledgerUpTo('0018');
   assert.ok(files.some((f) => f.startsWith('0012_dm_reactions')), 'migration 0012 present');
   const cols = db.prepare('PRAGMA table_info(dms)').all().map((c) => c.name);
   assert.ok(cols.includes('react_a') && cols.includes('react_b'), 'dms.react_a / dms.react_b');
@@ -113,7 +112,6 @@ test('the reaction is validated by the kernel, in the one worker membrane: the h
   r = await react(A, 1, '');
   assert.deepEqual({ status: r.status, emoji: r.json.emoji }, { status: 200, emoji: '' }, 'an empty string withdraws');
   assert.deepEqual(reactions(db, 1), [['B', '❤️']], 'a withdrawn reaction is no row at all');
-  assert.deepEqual(pairCols(db, 1), { react_a: null, react_b: null, liked_a: null, liked_b: null }, 'the pair columns are never written again');
   db.close();
 });
 
