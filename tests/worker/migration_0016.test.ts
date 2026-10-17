@@ -58,8 +58,8 @@ function seeded() {
   return db;
 }
 
-test('the ledger builds through 0016: the member model, the four ledgers, saved_by, and every legacy column still there', () => {
-  const { db, files } = freshDb();
+test('the ledger builds through 0016: the member model, the four ledgers, saved_by, and every legacy column still there (until 0019)', () => {
+  const { db, files } = freshDb('0018');
   assert.ok(files.some((f) => f.startsWith('0016_dm_members')), 'migration 0016 present');
   const t = cols(db, 'dm_threads');
   for (const c of ['id', 'kind', 'pair_key', 'name', 'created_at', 'created_by', 'last_at', 'last_sender', 'msgs', 'ttl',

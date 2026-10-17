@@ -294,28 +294,6 @@ def card(title, url, desc, og_type='book', extra=()):
     return FENCE_OPEN + '\n' + body + '\n' + FENCE_CLOSE
 
 
-def legacy_card(title, url):
-    """The unfenced block this script wrote before 2026-09-17 — the generic
-    "A primary source…" card, byte for byte, so a pages tree restored from the
-    build cache can have it REMOVED by exact match and the real card put in its
-    place. A shim: see tests/_support/retirements.json. Once every cached tree
-    has turned over, this and its caller go, and the fence is the only road."""
-    tags = [
-        ('meta name="description"', esc(DESC)),
-        ('meta property="og:type"', 'book'),
-        ('meta property="og:site_name"', 'Mere Catholicity'),
-        ('meta property="og:title"', title),
-        ('meta property="og:description"', esc(DESC)),
-        ('meta property="og:url"', esc(url)),
-        ('meta property="og:image"', esc(IMAGE)),
-        ('meta name="twitter:card"', 'summary_large_image'),
-        ('meta name="twitter:title"', title),
-        ('meta name="twitter:description"', esc(DESC)),
-        ('meta name="twitter:image"', esc(IMAGE)),
-    ]
-    return '\n'.join('<' + a + ' content="' + v + '">' for a, v in tags)
-
-
 def place_card(html, block, title_tag):
     """Rewrite the fenced card in place, or put a new one after <title>."""
     if FENCE_RE.search(html):
@@ -332,7 +310,7 @@ def uncard(html):
 def main():
     works = catalog()
     parts = parts_index()
-    written = skipped = flashed = shimmed = 0
+    written = skipped = flashed = 0
     for name in sorted(os.listdir(DOCS)):
         if not name.endswith('.html'):
             continue
@@ -356,12 +334,6 @@ def main():
         m = TITLE_RE.search(html)
         title = clean_title(m.group(1)) if m and m.group(1).strip() else ''
         url = SITE + '/' + name
-        if title and FENCE_OPEN not in html:
-            # the shim: an old unfenced card of ours is removed, not curated
-            without = html.replace('\n' + legacy_card(title, url), '', 1)
-            if without != html:
-                html = without
-                shimmed += 1
         if not title:
             skipped += 1
         elif NOINDEX_RE.search(html):
@@ -388,8 +360,7 @@ def main():
     # `asserted` is every page whose card this run wrote or re-wrote from the
     # catalog; a page whose bytes already said exactly that is not touched.
     print('inject_social: asserted', written, 'cards from', len(works),
-          'works on the shelves;', flashed, 'flash scripts;', shimmed,
-          'legacy cards replaced; skipped', skipped)
+          'works on the shelves;', flashed, 'flash scripts; skipped', skipped)
 
 
 if __name__ == '__main__':

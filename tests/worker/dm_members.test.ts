@@ -126,7 +126,7 @@ test('who may read an attachment (dmMediaReadable): a member who can see a live,
   db.close();
 });
 
-test('the pair\'s room is made once (ensurePairThread): the upsert survives the pair index and the legacy one, and heals a room made without its pair_key', async () => {
+test('the pair\'s room is made once (ensurePairThread): the upsert meets the pair index, and the legacy pair columns are never written', async () => {
   const db = freshDb();
   const env = makeEnv({ db }) as unknown as WEnv;
   const first = (await ensurePairThread(env, A.hash, B.hash, 100, { bump: true, sender: A.hash })).id;
@@ -136,12 +136,9 @@ test('the pair\'s room is made once (ensurePairThread): the upsert survives the 
   assert.equal((await ensurePairThread(env, A.hash, B.hash, 300, { bump: false })).id, first);
   assert.equal(db.prepare('SELECT last_at FROM dm_threads WHERE id = ?').get(first)!.last_at, 200, 'a held send bumps nothing');
   assert.deepEqual(names(db.prepare('SELECT hash FROM dm_members WHERE thread_id = ?').all(first).map((r) => r.hash as string)), ['A', 'B'], 'both seats, once');
-  /* A room the pre-0016 worker made in the deploy window: a_hash/b_hash, no pair_key. */
-  db.prepare("INSERT INTO dm_threads (kind, created_at, last_at, last_sender, msgs, a_hash, b_hash) VALUES (0, 50, 50, ?, 0, ?, ?)").run(C.hash, A.hash, C.hash);
-  const healed = await ensurePairThread(env, A.hash, C.hash, 300, { bump: true, sender: A.hash });
-  assert.equal(db.prepare('SELECT pair_key FROM dm_threads WHERE id = ?').get(healed.id)!.pair_key, [A.hash, C.hash].sort().join('|'), 'healed: the legacy index found it, pair_key filled');
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM dm_threads').get()!.n, 2, 'no second room');
-  assert.deepEqual(names(db.prepare('SELECT hash FROM dm_members WHERE thread_id = ?').all(healed.id).map((r) => r.hash as string)), ['A', 'C'], 'and its seats made');
+  /* 0019 (2026-10-17): a_hash/b_hash are no longer written, so the migration
+     after it can drop them without failing the worker it replaces. */
+  assert.deepEqual({ ...db.prepare('SELECT a_hash, b_hash FROM dm_threads WHERE id = ?').get(first) }, { a_hash: null, b_hash: null }, 'the legacy pair columns stay empty');
   db.close();
 });
 

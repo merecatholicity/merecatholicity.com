@@ -443,9 +443,9 @@ out of the list and BOTH unread counts, and `kind:'wall'` bookmarks drop out of
 `/bookmarks` while `POST /bookmark {kind:'wall'}` falls into the pre-existing
 `'Bad request.'` — so no badge or saved row points at something unreachable.
 
-**Nothing is deleted.** Every `wall_posts`, `wall_comments`, `wall_likes`,
-`wall_comment_likes`, `bookmarks` and `notifications` row survives untouched and
-returns exactly as it was when the switch goes back on.
+**Nothing is deleted.** Every `wall_posts`, `wall_comments`, `reactions`,
+`bookmarks` and `notifications` row survives untouched and returns exactly as it
+was when the switch goes back on.
 
 Deliberately still open when off: **`/wall/delete`** (an author or admin must
 always be able to retract), **`GET /wall/media`** (it serves forum attachments
@@ -958,7 +958,8 @@ avatar, faith, created_at, updated_at); `admins` (hash PK, added_by,
 created_at); `locks`, `ip_bans` (normalized key), `identity_ips`, `trusted`,
 `bans` (legacy); `dm_threads`/`dms`/`dm_blocks`; `reactions` (target `post|wall|wallc`,
 target_id, author_hash, emoji, created_at; PK on the three — one per member
-per target; `wall_likes`/`wall_comment_likes` are frozen since 0014);
+per target; the old `wall_likes`/`wall_comment_likes`, frozen since 0014, were
+dropped by 0019);
 `notifications`/`watches`;
 `thread_reads` (topic_id 0 = read-all floor); `reports`; `comments_fts` (FTS5
 external-content over `comments`, `porter unicode61`, kept in lockstep by three
