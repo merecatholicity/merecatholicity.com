@@ -1460,9 +1460,9 @@ export async function dmThreadFor(env: Env, me: string, data: Body | null): Prom
 /* A pair's room, made on its first word (or its first setting) with both
    member rows; an existing one is returned as it stands. `bump` moves the
    last-word fields (never for a held send: the recipient's world stays
-   untouched). The legacy a_hash/b_hash are no longer written (migration 0019,
-   2026-10-17; the next one drops them); the target-less ON CONFLICT meets the
-   pair_key index, and heals a room the pre-0016 worker made without one. */
+   untouched). The pair is its pair_key (the legacy a_hash/b_hash went in
+   0019 and 0020); the target-less ON CONFLICT meets the pair_key index, and
+   heals a room the pre-0016 worker made without one. */
 export async function ensurePairThread(env: Env, h1: string, h2: string, now: number, opts?: { bump?: boolean; sender?: string }) {
   const [a, b] = dmPair(h1, h2);
   const sender = (opts && opts.sender) || h1;
