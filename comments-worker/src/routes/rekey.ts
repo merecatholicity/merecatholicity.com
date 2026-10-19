@@ -51,8 +51,6 @@ export const REKEY_COLS: ReadonlyArray<readonly [string, string]> = [
   ['dm_blocks', 'owner_hash'], ['dm_blocks', 'blocked_hash'],
   ['dm_members', 'hash'], ['dm_members', 'added_by'], ['dm_reactions', 'hash'],
   ['dm_threads', 'created_by'], ['dm_threads', 'last_sender'],
-  /* dm_threads.a_hash / b_hash are not moved: unread since 0016, unwritten
-     since 0019, and dropped by the migration after it (2026-10-17). */
 ];
 
 /* The member's own sealed keys, each with the SENDER's published pubkey, so the

@@ -207,7 +207,7 @@ export function seed(who: Who): { db: DatabaseSync; lib: DatabaseSync; ids: Ids 
     .run(thread, who.admin.hash, v('dms.body'), now - 4, v('dm_media.key')).lastInsertRowid);
   db.prepare('INSERT INTO dm_keys (msg_id, hash, sealed) VALUES (?, ?, ?), (?, ?, ?)')
     .run(dm, who.member.hash, v('dm_keys.sealed (member)'), dm, who.admin.hash, v('dm_keys.sealed (admin)'));
-  db.prepare('INSERT INTO dm_media (key, size, created_at, msg_id) VALUES (?, 64, ?, ?)').run(v('dm_media.key'), now - 4, dm);
+  db.prepare('INSERT INTO dm_media (key, size, created_at) VALUES (?, 64, ?)').run(v('dm_media.key'), now - 4);
   db.prepare('INSERT INTO dm_media_refs (key, msg_id) VALUES (?, ?)').run(v('dm_media.key'), dm);
   /* a group the member and the admin are in, and the outsider is not */
   const group = Number(db.prepare("INSERT INTO dm_threads (kind, pair_key, name, created_at, created_by, last_at, last_sender, msgs) VALUES (1, NULL, 'a sweep group', ?, ?, ?, ?, 0)")

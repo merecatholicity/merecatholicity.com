@@ -4,16 +4,16 @@
   "where": "comments-worker/src/lib.ts",
   "pattern": "SELECT hash FROM profiles WHERE hash = \\?1 LIMIT 1'\\)\\.bind\\(wire\\)",
   "since": "2026-09-18",
-  "due": "2026-10-18",
-  "how": "once every shared `profile.html?u=<hash>` link and push `?dm=<hash>` URL minted before the L3 flip has aged out (30 days), drop resolveId's trailing raw-hash lookup so only a pubid resolves; an account hash on the wire is then simply unknown."
+  "due": "2026-11-02",
+  "how": "once every shared `profile.html?u=<hash>` link and push `?dm=<hash>` URL minted before the L3 flip has aged out (30 days), drop resolveId's trailing raw-hash lookup so only a pubid resolves; an account hash on the wire is then simply unknown. — moved from 2026-10-18 on 2026-10-19: the same lookup is also the net for a member registered after the reverse map loaded (lib.ts resolveId), so retiring it needs a `pubid = ?1` lookup in its place, an identity change for its own pull request and /security-review, not a line deleted under a red build."
  },
  {
   "what": "weakKeyTolerated — a WEAK identity key that already has history behind it may still write",
   "where": "comments-worker/src/lib.ts",
   "pattern": "function weakKeyTolerated\\(",
   "since": "2026-09-18",
-  "due": "2026-10-18",
-  "how": "delete weakKeyTolerated() and the `known && weakKeyTolerated()` clause in keyFloor, so the floor holds for EVERY write. A weak-key member is no longer locked out: key rotation (POST /profile/rekey, 2026-09-18) lets them move to a strong key with their content, so on the due date a weak key is refused a write and told to rotate. Run scripts/key_audit.py first and give any cracked member a heads-up to rotate; move this date only if one cannot be reached in time."
+  "due": "2026-11-02",
+  "how": "delete weakKeyTolerated() and the `known && weakKeyTolerated()` clause in keyFloor, so the floor holds for EVERY write. A weak-key member is no longer locked out: key rotation (POST /profile/rekey, 2026-09-18) lets them move to a strong key with their content, so on the due date a weak key is refused a write and told to rotate. Run scripts/key_audit.py first and give any cracked member a heads-up to rotate; move this date only if one cannot be reached in time. — moved from 2026-10-18 on 2026-10-19: scripts/key_audit.py has not been run and no weak-key member has had the heads-up yet; both come first."
  },
  {
   "what": "the legacy actor_hash clause: a DM bell from before 0016 named its sender, not its thread",
@@ -22,13 +22,5 @@
   "since": "2026-09-14",
   "due": "2026-11-16",
   "how": "once no unread bell with topic_id 0 remains, drop this clause and the two `topic_id = 0 AND actor_hash` clauses in routes/dm.ts; tests/worker/notif_read — moved from 2026-10-16 on 2026-10-17: two unread pre-0016 DM bells (topic_id 0) still stood in production, and this clause is what clears them when their conversation is read; retire it once none remains (or once they are marked read)."
- },
- {
-  "what": "dm_threads.a_hash / b_hash and dm_media.msg_id — the three legacy columns 0019 stopped writing but could not drop, because the worker it replaced still wrote them during the deploy",
-  "where": "comments-worker/schema.sql",
-  "pattern": "a_hash       TEXT,      -- legacy, unread after 0016",
-  "since": "2026-10-17",
-  "due": "2026-10-24",
-  "how": "migration 0020 retire_legacy_writes, once 0019's worker is the one deployed: ALTER TABLE dm_threads DROP COLUMN a_hash, b_hash; ALTER TABLE dm_media DROP COLUMN msg_id; make schema-snapshot; then drop this entry (tests/worker/migration_0019.test.ts already holds that nothing names them)."
  }
 ]

@@ -100,8 +100,8 @@ stateTag st = case st of
 -- | the distinction between them is the whole design:
 -- |
 -- |   * `keyRefusal` — a WRITE from a `Weak` key. A new identity is refused
--- |     outright; an existing one is refused from 2026-10-18 (the ledger entry
--- |     in tests/_support/retirements.json carries the date). The server cannot
+-- |     outright; an existing one is refused from the due date of its ledger
+-- |     entry in tests/_support/retirements.json. The server cannot
 -- |     judge a key after the fact, but it sees the key on every request, so
 -- |     this is the one moment it can.
 -- |   * `keyWarning` — what a reader is told at sign-in. Never a refusal: a key

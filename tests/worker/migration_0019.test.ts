@@ -68,3 +68,23 @@ test('the worker names none of the columns the next migration drops', () => {
   assert.ok(!/INSERT INTO dm_media \([^)]*msg_id/.test(all), 'an upload names no msg_id');
   assert.ok(!/FROM dm_media\b[^;'"]*msg_id|dm_media\.msg_id/.test(all), 'nothing reads dm_media.msg_id');
 });
+
+/* 0020 (2026-10-19), the second half: with 0019's worker deployed, the three
+   columns it stopped writing go, and nothing they held is lost — the pair is
+   its pair_key and the object's message its dm_media_refs row. */
+test('0020 drops the three legacy columns once nothing writes them, and keeps every row', () => {
+  const db = ledgerUpTo('0019');
+  db.exec(`INSERT INTO dm_threads (id, kind, pair_key, created_at, last_at, last_sender, msgs, a_hash, b_hash)
+           VALUES (1, 0, '${A}|${B}', 10, 20, '${B}', 2, '${A}', '${B}')`);
+  db.exec(`INSERT INTO dm_media (key, size, created_at, msg_id) VALUES ('dm/k1', 99, 20, 5)`);
+  db.exec(`INSERT INTO dm_media_refs (key, msg_id) VALUES ('dm/k1', 5)`);
+  db.exec(readFileSync(join(migrationsDir, '0020_retire_legacy_writes.sql'), 'utf8'));
+
+  for (const c of ['a_hash', 'b_hash']) assert.ok(!cols(db, 'dm_threads').includes(c), 'dm_threads.' + c + ' dropped');
+  assert.ok(!cols(db, 'dm_media').includes('msg_id'), 'dm_media.msg_id dropped');
+  assert.deepEqual({ ...db.prepare('SELECT id, pair_key, last_sender, msgs FROM dm_threads').get() },
+    { id: 1, pair_key: A + '|' + B, last_sender: B, msgs: 2 }, 'the pair is still its pair_key');
+  assert.deepEqual({ ...db.prepare('SELECT key, size, created_at FROM dm_media').get() }, { key: 'dm/k1', size: 99, created_at: 20 });
+  assert.deepEqual({ ...db.prepare('SELECT key, msg_id FROM dm_media_refs').get() }, { key: 'dm/k1', msg_id: 5 }, 'the object still knows its message');
+  db.close();
+});

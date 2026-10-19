@@ -136,9 +136,7 @@ test('the pair\'s room is made once (ensurePairThread): the upsert meets the pai
   assert.equal((await ensurePairThread(env, A.hash, B.hash, 300, { bump: false })).id, first);
   assert.equal(db.prepare('SELECT last_at FROM dm_threads WHERE id = ?').get(first)!.last_at, 200, 'a held send bumps nothing');
   assert.deepEqual(names(db.prepare('SELECT hash FROM dm_members WHERE thread_id = ?').all(first).map((r) => r.hash as string)), ['A', 'B'], 'both seats, once');
-  /* 0019 (2026-10-17): a_hash/b_hash are no longer written, so the migration
-     after it can drop them without failing the worker it replaces. */
-  assert.deepEqual({ ...db.prepare('SELECT a_hash, b_hash FROM dm_threads WHERE id = ?').get(first) }, { a_hash: null, b_hash: null }, 'the legacy pair columns stay empty');
+  assert.equal(db.prepare('SELECT pair_key FROM dm_threads WHERE id = ?').get(first)!.pair_key, [A.hash, B.hash].sort().join('|'), 'the pair is its pair_key (a_hash/b_hash dropped by 0020)');
   db.close();
 });
 
