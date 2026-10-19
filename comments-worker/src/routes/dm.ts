@@ -1027,7 +1027,7 @@ async function handleDmMediaUpload(request: Request, env: Env) {
   if (bytes.length > maxBytes) return json({ ok: false, error: 'That file is too large.' }, 413);
   const mediaKey = 'dm/' + randomHex(32);
   await env.MEDIA.put(mediaKey, bytes, { httpMetadata: { contentType: 'application/octet-stream' } });
-  await env.DB.prepare('INSERT INTO dm_media (key, size, created_at, msg_id) VALUES (?1, ?2, ?3, NULL)')
+  await env.DB.prepare('INSERT INTO dm_media (key, size, created_at) VALUES (?1, ?2, ?3)')
     .bind(mediaKey, bytes.length, Math.floor(Date.now() / 1000)).run();
   return json({ ok: true, media_key: mediaKey, size: bytes.length }, 200);
 }

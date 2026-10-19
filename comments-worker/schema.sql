@@ -845,3 +845,61 @@ WHERE verified_at IS NULL AND hash IN (
   '431230bb0b4e1fab7e2299b612b21bbcc7cf54016b56389d9ac30d1ef70dabf8',
   'ff116db3c9e37db220330232046fddff87119e0339d668469ee911597536ddb0'
 );
+-- retire_pair_columns (2026-10-17). Additive is not forever: four entries of
+-- tests/_support/retirements.json fell due on 2026-10-14, each a column or a
+-- table nothing has read since the member model (0016) and the reactions
+-- ledgers (0012, 0014) replaced it. The owner chose to retire them (the
+-- 2026-10-15 nightly thread); the daily backup of 2026-10-16 stands behind it.
+--
+-- What goes is what NO worker touches, this one or the one it replaces: the
+-- ledger is applied BEFORE `wrangler deploy`, so for those seconds the old
+-- worker is still serving, and a column it still writes must outlive it. The
+-- three it writes (dm_threads.a_hash / b_hash on a pair's first word and on a
+-- rekey; dm_media.msg_id, NULL on every upload) stop being written by this
+-- deploy and are dropped by the NEXT migration — their own ledger entry.
+--
+-- SQLite refuses to drop an indexed column, so each index goes first.
+
+-- 1. A pair's per-side stamps: dm_members holds read_at / cleared_at per member.
+--    The legacy pair uniqueness goes too: its one reader was the pre-0016
+--    worker's ON CONFLICT(a_hash, b_hash), and pair_key's own unique index is
+--    the one-room-per-pair rule.
+DROP INDEX IF EXISTS dm_threads_ab_idx;
+ALTER TABLE dm_threads DROP COLUMN a_read_at;
+ALTER TABLE dm_threads DROP COLUMN b_read_at;
+ALTER TABLE dm_threads DROP COLUMN a_cleared_at;
+ALTER TABLE dm_threads DROP COLUMN b_cleared_at;
+
+-- 2. A pair's per-side reaction and heart: dm_reactions holds one per member.
+ALTER TABLE dms DROP COLUMN react_a;
+ALTER TABLE dms DROP COLUMN react_b;
+ALTER TABLE dms DROP COLUMN liked_a;
+ALTER TABLE dms DROP COLUMN liked_b;
+
+-- 3. The message an object belonged to: dm_media_refs names every message that
+--    shares it. The index goes now (nothing reads by msg_id); the column next.
+DROP INDEX IF EXISTS dm_media_msg_idx;
+
+-- 4. The feed's likes, frozen since 0014 carried each across as a ❤️ reaction.
+DROP TABLE IF EXISTS wall_likes;
+DROP TABLE IF EXISTS wall_comment_likes;
+-- retire_legacy_writes (2026-10-19). The second half of 0019: the three
+-- legacy columns that 0019 stopped writing but could not drop, because the
+-- worker it replaced still wrote them while the ledger ran ahead of `wrangler
+-- deploy`. 0019's worker is the one deployed now and names none of them
+-- (tests/worker/migration_0019.test.ts), so nothing serving reads or writes
+-- what goes here, before this deploy or after it. The owner chose to drop them
+-- (the 2026-10-15 nightly thread).
+--
+-- Nothing is lost: a pair's two hashes are its pair_key ('a|b', backfilled by
+-- 0016 and written on every first word since), and every media object's
+-- message is a dm_media_refs row (0016 copied each msg_id there). The indexes
+-- on all three went in 0019.
+
+-- 1. A pair's two sides: dm_members holds the members, pair_key the pair.
+ALTER TABLE dm_threads DROP COLUMN a_hash;
+ALTER TABLE dm_threads DROP COLUMN b_hash;
+
+-- 2. An object's messages: dm_media_refs names every message an object
+--    serves (forwards included); the object dies with its last reference.
+ALTER TABLE dm_media DROP COLUMN msg_id;

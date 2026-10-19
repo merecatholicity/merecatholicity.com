@@ -19,7 +19,8 @@ const ledger = JSON.parse(readFileSync(join(root, 'tests', '_support', 'retireme
 const today = new Date().toISOString().slice(0, 10);
 
 test('every entry is well-formed: a file, a pattern, dates in order, and a way to retire it', () => {
-  assert.ok(ledger.length >= 5);
+  /* the ledger is read at all (it shrinks as items retire: 0019 took five, 2026-10-17) */
+  assert.ok(ledger.length >= 1);
   for (const r of ledger) {
     for (const k of ['what', 'where', 'pattern', 'since', 'due', 'how']) assert.ok(typeof r[k] === 'string' && r[k], k + ' in ' + JSON.stringify(r).slice(0, 80));
     assert.match(r.since, /^\d{4}-\d{2}-\d{2}$/); assert.match(r.due, /^\d{4}-\d{2}-\d{2}$/);

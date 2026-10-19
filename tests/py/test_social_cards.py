@@ -10,9 +10,9 @@ own.
 
 What would break silently now: a formula that stops naming the shelf (every
 Library page back to one sentence); a card that never reaches a pages tree
-restored from the build cache (the fence is what makes a rewrite possible); the
-legacy shim's bytes drifting from what actually shipped, so the old card is
-never found and never removed; and a noindex door page advertising itself.
+restored from the build cache (the fence is what makes a rewrite possible); and
+a noindex door page advertising itself. (The unfenced pre-fence card's shim was
+retired 2026-10-17, a month of builds after every cached tree was fenced.)
 
 The sweep is over EVERY page, not a sample: the class of bug here is "one page
 was fixed and the other 233 were not".
@@ -124,26 +124,6 @@ class TheCard(unittest.TestCase):
         bishop = m.OVERRIDES['bishop-presbyter.html']
         self.assertEqual(bishop['og_type'], 'article')
         self.assertIn('bishop and presbyter', bishop['desc'])
-
-    def test_the_shim_reproduces_the_old_card_byte_for_byte(self):
-        """The legacy strip works by EXACT match: these are the bytes this
-        script wrote before 2026-09-17, and a cached tree is full of them. If
-        this text drifts, the old card is never found, never removed, and the
-        new one never lands on any page the cache carried."""
-        expected = (
-            '<meta name="description" content="A primary source in the Mere Catholicity Library.">\n'
-            '<meta property="og:type" content="book">\n'
-            '<meta property="og:site_name" content="Mere Catholicity">\n'
-            '<meta property="og:title" content="A work">\n'
-            '<meta property="og:description" content="A primary source in the Mere Catholicity Library.">\n'
-            '<meta property="og:url" content="https://merecatholicity.com/x.html">\n'
-            '<meta property="og:image" content="https://merecatholicity.com/cover.jpg">\n'
-            '<meta name="twitter:card" content="summary_large_image">\n'
-            '<meta name="twitter:title" content="A work">\n'
-            '<meta name="twitter:description" content="A primary source in the Mere Catholicity Library.">\n'
-            '<meta name="twitter:image" content="https://merecatholicity.com/cover.jpg">')
-        self.assertEqual(m.legacy_card('A work', 'https://merecatholicity.com/x.html'),
-                         expected)
 
 
 class EveryServedPage(unittest.TestCase):

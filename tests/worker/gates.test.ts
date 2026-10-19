@@ -98,7 +98,7 @@ test('pipelineGated: parse, then the caller — an admin key opens; anything els
  * READS (a weak-key member should be able to sign in and be TOLD, not walled);
  * the floor put on the anonymous empty key (every `key: 'optional'` road would
  * answer 400 about key strength instead of its own rule); a D1 read spent on
- * every strong key; or the 2026-10-18 tolerance quietly becoming permanent. */
+ * every strong key; or the dated tolerance quietly becoming permanent. */
 test('keyFloor: a weak key is refused on a WRITE and never on a read, and the anonymous empty key is not a weak one', async () => {
   const db = freshDb();
   const env = makeEnv({ db }) as unknown as Env;
@@ -122,7 +122,7 @@ test('keyFloor: a weak key is refused on a WRITE and never on a read, and the an
   db.close();
 });
 
-test('keyFloor: a weak key with history behind it still writes until 2026-10-18, and the ledger carries the date', async () => {
+test('keyFloor: a weak key with history behind it still writes until its due date, and the ledger carries the date', async () => {
   const db = freshDb();
   const env = makeEnv({ db }) as unknown as Env;
   db.prepare('INSERT INTO profiles (hash, created_at) VALUES (?, 1)').run(weak.hash);
@@ -133,7 +133,9 @@ test('keyFloor: a weak key with history behind it still writes until 2026-10-18,
   const ledger = JSON.parse(readFileSync(join(root, 'tests', '_support', 'retirements.json'), 'utf8'));
   const entry = ledger.find((e: Row) => /weakKeyTolerated/.test(e.pattern));
   assert.ok(entry, 'the tolerance is named in the retirement ledger');
-  assert.equal(entry.due, '2026-10-18');
+  /* moved once, from 2026-10-18 (2026-10-19): the key audit and the members'
+     heads-up come first. A move is a change to this line too, never silent. */
+  assert.equal(entry.due, '2026-11-02');
   db.close();
 });
 

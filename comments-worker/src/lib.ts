@@ -1460,19 +1460,18 @@ export async function dmThreadFor(env: Env, me: string, data: Body | null): Prom
 /* A pair's room, made on its first word (or its first setting) with both
    member rows; an existing one is returned as it stands. `bump` moves the
    last-word fields (never for a held send: the recipient's world stays
-   untouched). The legacy a_hash/b_hash are still WRITTEN for a pair — never
-   read by this code — so a rolled-back worker would still find the room;
-   the target-less ON CONFLICT covers the pair index and the legacy one alike,
-   and heals a room the old worker made without its pair_key. */
+   untouched). The pair is its pair_key (the legacy a_hash/b_hash went in
+   0019 and 0020); the target-less ON CONFLICT meets the pair_key index, and
+   heals a room the pre-0016 worker made without one. */
 export async function ensurePairThread(env: Env, h1: string, h2: string, now: number, opts?: { bump?: boolean; sender?: string }) {
   const [a, b] = dmPair(h1, h2);
   const sender = (opts && opts.sender) || h1;
   const row = await env.DB.prepare(
-    'INSERT INTO dm_threads (kind, pair_key, created_at, last_at, last_sender, msgs, a_hash, b_hash) VALUES (0, ?1, ?2, ?2, ?3, 0, ?4, ?5) ' +
+    'INSERT INTO dm_threads (kind, pair_key, created_at, last_at, last_sender, msgs) VALUES (0, ?1, ?2, ?2, ?3, 0) ' +
     (opts && opts.bump
       ? 'ON CONFLICT DO UPDATE SET pair_key = COALESCE(pair_key, excluded.pair_key), last_at = ?2, last_sender = ?3 RETURNING id'
       : 'ON CONFLICT DO UPDATE SET pair_key = COALESCE(pair_key, excluded.pair_key) RETURNING id')
-  ).bind(dmPairKey(a, b), now, sender, a, b).first<{ id: number }>() as { id: number };
+  ).bind(dmPairKey(a, b), now, sender).first<{ id: number }>() as { id: number };
   await env.DB.prepare('INSERT OR IGNORE INTO dm_members (thread_id, hash, joined_at) VALUES (?1, ?2, ?3)').bind(row.id, a, now).run();
   await env.DB.prepare('INSERT OR IGNORE INTO dm_members (thread_id, hash, joined_at) VALUES (?1, ?2, ?3)').bind(row.id, b, now).run();
   return row;
