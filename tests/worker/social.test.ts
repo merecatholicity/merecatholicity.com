@@ -154,7 +154,7 @@ test('no migration is needed: app_settings takes the flag as a plain row', () =>
   assert.equal(row.v, '0');
   /* And nothing is deleted by turning it off: the tables the switch hides are
      ordinary tables the switch never touches. */
-  for (const t of ['wall_posts', 'wall_comments', 'wall_likes', 'wall_comment_likes', 'bookmarks']) {
+  for (const t of ['wall_posts', 'wall_comments', 'bookmarks']) {
     assert.ok((db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get() as Row).n === 0, `${t} must exist`);
   }
   db.close();

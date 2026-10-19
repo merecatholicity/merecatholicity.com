@@ -21,10 +21,12 @@ FIX = ('# A heading\n**bold** and *ital* and :kekw: and :fire: and :nope: stay\n
        '[our credo](https://merecatholicity.com/credo.html) and '
        '[out](https://example.com/x)')
 
-# The hover's one slow step is kjv.json — the whole text, fetched on the first
-# hover, a cold edge miss most nights — so the tip is POLLED for, up to this
-# many ms, rather than given a fixed delay that measures the night's bandwidth
-# instead of the feature (2.5 s used to, 2026-10-07).
+# The hover's one slow step is kjv.json — the whole text, 4 MB, fetched on the
+# first hover; until 2026-10-15 never in the edge cache at all (Cloudflare
+# caches no .json by default; terraform/cache.tf now holds its stamped address)
+# — so the tip is POLLED for, up to this many ms, rather than given a fixed
+# delay that measures the night's bandwidth instead of the feature (2.5 s used
+# to, 2026-10-07), and a FAIL says how long the text's fetch took.
 TIP_WAIT_MS = 15000
 
 
@@ -69,8 +71,11 @@ def main():
               var t = document.querySelector('.scripture-tip');
               var shown = !!t && !t.hidden && t.textContent.length > 0;
               if (shown || Date.now() - t0 > %d) {
+                var got = performance.getEntriesByType('resource').filter(function (e) { return /\\/kjv\\.json/.test(e.name); })
+                  .map(function (e) { return Math.round(e.duration) + ' ms ' + Math.round(e.encodedBodySize / 1024) + ' KiB'; });
                 res(JSON.stringify({shown: shown, ms: Date.now() - t0, ref: sl.textContent,
-                                    text: t ? t.textContent.slice(0, 70) : ''}));
+                                    text: t ? t.textContent.slice(0, 70) : '',
+                                    fetch: got.join('; ') || 'none finished'}));
               } else { setTimeout(poll, 100); }
             })();
           });""" % TIP_WAIT_MS))
@@ -79,8 +84,8 @@ def main():
         if not hovered:
             # the FAIL line says what was seen, so the nightly's report names
             # the cause and not the symptom
-            f.failures.append('verse hover: tip shown=%s after %s ms over %r, text=%r'
-                              % (tip['shown'], tip['ms'], tip['ref'], tip['text']))
+            f.failures.append('verse hover: tip shown=%s after %s ms over %r, text=%r, kjv.json %s'
+                              % (tip['shown'], tip['ms'], tip['ref'], tip['text'], tip.get('fetch')))
         checks = [
             ('heading + bold + em', st['hd'] and st['bold'] and st['em']),
             ('custom emoji from whitelist', st['emoji'] == 'emoji/memes/kekw.webp'),

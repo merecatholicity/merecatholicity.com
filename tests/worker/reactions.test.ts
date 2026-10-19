@@ -38,7 +38,7 @@ const body = (text: string, name: string) => handlerBody(name, text);
 const me = 'a'.repeat(64), other = 'b'.repeat(64), third = 'c'.repeat(64);
 
 test('the ledger builds through 0014: one reaction per member per target, the notification CHECK widened', () => {
-  const { db, files } = freshDb();
+  const { db, files } = freshDb('0018');
   assert.ok(files.some((f) => f.startsWith('0014_reactions')), 'migration 0014 present');
   const cols = db.prepare('PRAGMA table_info(reactions)').all().map((c) => c.name);
   assert.deepEqual(cols, ['target', 'target_id', 'author_hash', 'emoji', 'created_at']);
@@ -50,7 +50,7 @@ test('the ledger builds through 0014: one reaction per member per target, the no
   for (const k of ['react', 'wall-react', 'dm-react']) nins.run(me, k, other);
   assert.throws(() => nins.run(me, 'reaction', other), /CHECK/);
   assert.ok(db.prepare("SELECT sql FROM sqlite_master WHERE name = 'notifications_recipient_idx'").get(), 'the index survives the table swap');
-  assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE name = 'wall_likes'").get(), 'the old like tables are left in place — the ledger never drops a table');
+  assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE name = 'wall_likes'").get(), 'the old like tables are left in place until 0019 retires them');
   db.close();
 });
 
