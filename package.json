@@ -20,16 +20,16 @@
     "build:pagejs": "esbuild pagejs/nav.ts pagejs/deeplink.ts pagejs/flash.ts pagejs/contact.ts pagejs/bible-reader.ts pagejs/away.ts pagejs/index.ts --minify --outdir=docs --tsconfig-raw={} --log-level=warning && esbuild pagejs/sw.ts --outfile=docs/sw.js --tsconfig-raw={} --log-level=warning"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261011.1",
+    "@cloudflare/workers-types": "^5.20261016.1",
     "@tailwindcss/cli": "^4.3.3",
     "@tailwindcss/typography": "^0.5.20",
     "@types/node": "^26.6.5",
     "esbuild": "0.28.2",
     "espree": "^11.2.0",
-    "spago": "^1.0.4",
+    "spago": "^1.0.5",
     "tailwindcss": "^4.3.3",
     "typescript": "7.0.2",
-    "wrangler": "^4.148.0"
+    "wrangler": "^4.151.1"
   },
   "dependencies": {
     "@breezystack/lamejs": "1.2.7",
