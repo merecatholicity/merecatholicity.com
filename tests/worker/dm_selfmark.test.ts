@@ -19,6 +19,7 @@
  * seats, with the pepper set so wire ids are not account hashes. */
 import { test, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { loadWorker, makeEnv, client, freshDb, identity, establish, publishKey, resetCaches, hubSpy } from '../_support/worker.ts';
 import type { Worker, Row } from '../_support/worker.ts';
 import type { DatabaseSync } from 'node:sqlite';
@@ -37,14 +38,16 @@ function ready() {
   for (const x of [A, B, C]) { establish(db, x.hash); publishKey(db, x.hash); }
   return db;
 }
+/* the wire id a client holds: an account hash on the wire names nobody (retired 2026-11-04) */
+const pub = (x: Id): string => createHash('sha256').update(PEPPER + x.hash).digest('hex');
 const api = (db: DatabaseSync) => client(worker, makeEnv({ db, hub: hubSpy(), vars: { PUBLIC_ID_PEPPER: PEPPER } }));
 
 async function seeded() {
   const db = ready();
   const a = api(db);
-  const id = (await a.post('/api/comments/dm/groups', { key: A.key, members: [B.hash, C.hash] })).json.thread_id;
+  const id = (await a.post('/api/comments/dm/groups', { key: A.key, members: [pub(B), pub(C)] })).json.thread_id;
   const send = async (who: Id, body: string) => {
-    const keys: Record<string, string> = {}; for (const x of [A, B, C]) keys[x.hash] = 's-' + x.hash.slice(0, 6);
+    const keys: Record<string, string> = {}; for (const x of [A, B, C]) keys[pub(x)] = 's-' + x.hash.slice(0, 6);
     const r = await a.post('/api/comments/dm/send', { key: who.key, thread_id: id, body: 'E3.' + body, enc: 3, keys });
     assert.equal(r.status, 200, JSON.stringify(r.json));
   };

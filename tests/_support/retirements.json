@@ -1,13 +1,5 @@
 [
  {
-  "what": "resolveId's raw-hash tolerance — an old account hash accepted where a pubid is now the wire id",
-  "where": "comments-worker/src/lib.ts",
-  "pattern": "SELECT hash FROM profiles WHERE hash = \\?1 LIMIT 1'\\)\\.bind\\(wire\\)",
-  "since": "2026-09-18",
-  "due": "2026-12-04",
-  "how": "once every shared `profile.html?u=<hash>` link and push `?dm=<hash>` URL minted before the L3 flip has aged out (30 days), drop resolveId's trailing raw-hash lookup so only a pubid resolves; an account hash on the wire is then simply unknown. — moved from 2026-10-18 on 2026-10-19: the same lookup is also the net for a member registered after the reverse map loaded (lib.ts resolveId), so retiring it needs a `pubid = ?1` lookup in its place, an identity change for its own pull request and /security-review, not a line deleted under a red build. — moved from 2026-11-02 on 2026-11-04: the pubid = ?1 lookup that must replace it has not been written; it is an identity change for its own pull request and /security-review, and the overdue entry had turned every pull request red."
- },
- {
   "what": "weakKeyTolerated — a WEAK identity key that already has history behind it may still write",
   "where": "comments-worker/src/lib.ts",
   "pattern": "function weakKeyTolerated\\(",

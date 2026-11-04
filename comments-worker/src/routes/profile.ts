@@ -228,7 +228,7 @@ async function handleProfileClear(request: Request, env: Env) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
-  const hash = (await resolveId(env, String(data.hash || ''))) || String(data.hash || '');  // a pubid on the wire (L3)
+  const hash = (await resolveId(env, String(data.hash || ''))) || '';  // a pubid on the wire (L3)
   if (!key || !/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!(await isAdminHash(env, await sha256hex(key)))) return json({ ok: false, error: 'No.' }, 403);
   if (env.AVATARS) await env.AVATARS.delete('avatars/' + hash);
@@ -306,7 +306,7 @@ async function handleProfileAdminEdit(request: Request, env: Env) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
-  const target = (await resolveId(env, String(data.hash || ''))) || String(data.hash || '');  // a pubid on the wire (L3)
+  const target = (await resolveId(env, String(data.hash || ''))) || '';  // a pubid on the wire (L3)
   if (!key || !/^[0-9a-f]{64}$/.test(target)) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!(await isAdminHash(env, await sha256hex(key)))) return json({ ok: false, error: 'No.' }, 403);
   if (target === MERECAT_BOT.hash) return json({ ok: false, error: 'The librarian keeps its own desk.' }, 400);
@@ -412,7 +412,7 @@ async function handleAvatarDelete(request: Request, env: Env) {
    new URL. No rate limiter: one page can hold many authors. */
 async function handleAvatarGet(request: Request, env: Env, url: URL) {
   if (!env.AVATARS) return new Response('No avatar.', { status: 404 });
-  const hash = (await resolveId(env, String(url.searchParams.get('hash') || ''))) || String(url.searchParams.get('hash') || '');  // a pubid on the wire (L3)
+  const hash = (await resolveId(env, String(url.searchParams.get('hash') || ''))) || '';  // a pubid on the wire (L3)
   if (!/^[0-9a-f]{64}$/.test(hash)) return new Response('Bad request.', { status: 400 });
   const obj = await env.AVATARS.get('avatars/' + hash);
   if (!obj) return new Response('No avatar.', { status: 404, headers: { 'Cache-Control': 'public, max-age=300' } });

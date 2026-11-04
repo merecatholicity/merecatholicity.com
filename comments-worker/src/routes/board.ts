@@ -671,7 +671,7 @@ async function handleMeta(request: Request, env: Env) {
   const hashParam = String(data.hash || '');
   /* the fingerprint is addressed by a pubid (the P0 chain L3) — resolve it to
      the account hash the ledger is keyed by; an unknown id has no history */
-  if (/^[0-9a-f]{64}$/.test(hashParam)) return await metaForHash(env, (await resolveId(env, hashParam)) || hashParam);
+  if (/^[0-9a-f]{64}$/.test(hashParam)) return await metaForHash(env, (await resolveId(env, hashParam)) || '');
   const page = normalizePage(data.page) || boardKey(data.page) || journalKey(data.page);
   if (!page) return json({ ok: false, error: 'Bad request.' }, 400);
   const rows = await env.DB.prepare(
@@ -775,7 +775,7 @@ async function handleBoardCat(request: Request, env: Env, url: URL) {
 async function handleAuthorPosts(request: Request, env: Env, url: URL) {
   const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
   if (limited instanceof Response) return limited;
-  const hash = (await resolveId(env, String(url.searchParams.get('hash') || ''))) || String(url.searchParams.get('hash') || '');  // a pubid on the wire (L3)
+  const hash = (await resolveId(env, String(url.searchParams.get('hash') || ''))) || '';  // a pubid on the wire (L3)
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
   const p = Math.min(1000, Math.max(1, Math.floor(Number(url.searchParams.get('p')) || 1)));
   const per = 20;
@@ -814,13 +814,14 @@ async function handleSearch(request: Request, env: Env, url: URL) {
   let catPage = boardKey('board:' + (url.searchParams.get('cat') || ''));
   if (catPage === ADMIN_CAT) catPage = null;
   const authorRaw = String(url.searchParams.get('author') || '');
-  const author = /^[0-9a-f]{64}$/.test(authorRaw) ? ((await resolveId(env, authorRaw)) || authorRaw) : null;  // a pubid on the wire (L3)
+  /* a pubid on the wire (L3); an id no member wears filters to nothing, never to everyone */
+  const author = /^[0-9a-f]{64}$/.test(authorRaw) ? ((await resolveId(env, authorRaw)) || '') : null;
   const order = url.searchParams.get('sort') === 'new' ? 'c.id DESC' : 'bm25(comments_fts)';
 
   const filters: string[] = [];
   const binds: string[] = [match];
   if (catPage) { binds.push(catPage); filters.push('AND c.page = ?' + binds.length); }
-  if (author) { binds.push(author); filters.push('AND c.author_hash = ?' + binds.length); }
+  if (author !== null) { binds.push(author); filters.push('AND c.author_hash = ?' + binds.length); }
   const where =
     "WHERE comments_fts MATCH ?1 AND c.page LIKE 'board:%' AND c.page != 'board:adminsonly' AND c.status = 'live' " +
     "AND (c.parent_id IS NULL OR pt.status = 'live') " +
@@ -1053,7 +1054,7 @@ async function handleTrust(request: Request, env: Env) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
-  const hash = (await resolveId(env, String(data.hash || ''))) || String(data.hash || '');  // a pubid on the wire (L3)
+  const hash = (await resolveId(env, String(data.hash || ''))) || '';  // a pubid on the wire (L3)
   if (!key || !/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!(await isAdminHash(env, await sha256hex(key)))) return json({ ok: false, error: 'No.' }, 403);
   if (data.trusted) {
