@@ -7,7 +7,6 @@ export function installBoard(B: Boot) {
   /* Names this module takes from the boot — the root's helpers and the other
      modules' exports — bound in bind() once every module is installed, so
      order of installation never matters and every body reads as it did. */
-  let ADMIN_HASHES: any;
   let API: any;
   let BLOCK_CONFIRM: any;
   let MERECAT_BOT_HASH: any;
@@ -977,7 +976,6 @@ trace('submit: board post');
     });
   }
   function bind() {
-    ADMIN_HASHES = B.ADMIN_HASHES;
     API = B.API;
     BLOCK_CONFIRM = B.BLOCK_CONFIRM;
     MERECAT_BOT_HASH = B.MERECAT_BOT_HASH;

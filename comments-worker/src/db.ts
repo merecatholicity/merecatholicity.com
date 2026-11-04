@@ -67,10 +67,15 @@ export function rankFor(n: unknown): string {
    of lib.ts (they would otherwise import each other). `author_hash` KEEPS ITS
    NAME and takes the pubid as its value, and `assigned` is derived from that
    pubid, so a client computes the same pseudonym from the id it receives. With
-   no `serve` (or none set), the raw hash rides — the pre-L3 valve. */
+   no `serve` (or none set), the raw hash rides — the pre-L3 valve. `admins`
+   (lib.ts adminSet: account hashes) stamps `author_admin`, the "(admin)" mark
+   a client cannot work out for itself: it never sees an account hash
+   (2026-11-04). It is looked up BEFORE the id is cloaked. */
 export type IdServe = (hash: string) => Promise<string | null>;
-export async function withNames(row: AuthoredRow, posts?: number | null, serve?: IdServe): Promise<AuthoredRow> {
+export async function withNames(row: AuthoredRow, posts?: number | null, serve?: IdServe,
+  admins?: ReadonlySet<string>): Promise<AuthoredRow> {
   const out: AuthoredRow = Object.assign({}, row);
+  if (admins) out.author_admin = !!row.author_hash && admins.has(row.author_hash);
   const pid = row.author_hash ? (serve ? await serve(row.author_hash) : row.author_hash) : null;
   if (row.author_hash) out.author_hash = pid;
   out.assigned = pid ? Pseudonym.displayName(pid) : null;

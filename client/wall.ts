@@ -7,7 +7,6 @@ export function installWall(B: Boot) {
   /* Names this module takes from the boot — the root's helpers and the other
      modules' exports — bound in bind() once every module is installed, so
      order of installation never matters and every body reads as it did. */
-  let ADMIN_HASHES: any;
   let API: any;
   let MERECAT_BOT_HASH: any;
   let appConfirm: (msg: any, opts: any, cb: any) => any;
@@ -465,7 +464,7 @@ export function installWall(B: Boot) {
     var head = el('div', 'comment-head');
     wallAvatarInto(head, c.author_hash, c.avatar);
     head.appendChild(authorNode(c.author_hash, c.nick, true, c.faith, c.posts));
-    if (c.author_hash && ADMIN_HASHES.indexOf(c.author_hash) !== -1) head.appendChild(el('span', 'comment-admin', '(admin)'));
+    if (c.author_admin) head.appendChild(el('span', 'comment-admin', '(admin)'));
     var cdate = el('a', 'comment-date', fmtTimeCompact(c.created_at));
     cdate.title = fmtDateTime(c.created_at);
     head.appendChild(cdate);
@@ -510,7 +509,7 @@ export function installWall(B: Boot) {
     var head = el('div', 'comment-head');
     wallAvatarInto(head, p.author_hash, p.avatar);
     head.appendChild(authorNode(p.author_hash, p.nick, true, p.faith, p.posts));
-    if (p.author_hash && ADMIN_HASHES.indexOf(p.author_hash) !== -1) head.appendChild(el('span', 'comment-admin', '(admin)'));
+    if (p.author_admin) head.appendChild(el('span', 'comment-admin', '(admin)'));   // the worker's word (wallEnrich)
     var permalink = el('a', 'comment-date', fmtTimeCompact(p.created_at));
     permalink.title = fmtDateTime(p.created_at);
     permalink.href = 'feed.html?post=' + p.id;
@@ -775,7 +774,6 @@ trace('submit: feed post');
     };
   }
   function bind() {
-    ADMIN_HASHES = B.ADMIN_HASHES;
     API = B.API;
     MERECAT_BOT_HASH = B.MERECAT_BOT_HASH;
     appConfirm = B.appConfirm;

@@ -83,6 +83,20 @@ test('the pre-load admin hint is not the account-hash list looked up by the publ
   assert.match(setKey, /state\.adminHint = false/, 'nor does this boot');
 });
 
+test('the client holds no list of account hashes to look anyone up in', () => {
+  /* The same list stamped "(admin)" on forum and feed posts by a row's
+     author_hash, which is a public id too, so no post was marked from
+     2026-09-19 to 2026-11-04. A row now says it (`author_admin`, stamped by the
+     worker: tests/worker/admin_mark.test.ts) and the list is gone. A 64-hex
+     account hash in a client source is the same mistake waiting. */
+  for (const [path, src] of sources()) {
+    assert.doesNotMatch(src, /\bADMIN_HASHES\s*[=:]/, path + ' defines or binds an admin hash list');
+  }
+  for (const path of ['app/views/post.ts', 'client/wall.ts']) {
+    assert.match(read(path), /\.author_admin\)/, path + ' marks a post by the row\'s own word');
+  }
+});
+
 test('hub routing is handed the ACCOUNT hash, never the public id', () => {
   for (const [path, src] of sources()) {
     const m = src.match(/member\.enable\(([^)]*)\)/g) || [];

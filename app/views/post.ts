@@ -49,8 +49,9 @@ function el(tag: string, cls?: string, text?: string): HTMLElement {
     var author = kit.authorNode(c.author_hash, c.nick, true, c.faith, c.posts);
     author.setAttribute('itemprop', 'author');
     head.appendChild(author);
-    /* The house speaks under its own colors. */
-    if (c.author_hash && kit.ADMIN_HASHES.indexOf(c.author_hash) !== -1) {
+    /* The house speaks under its own colors: the worker says so on the row
+       (`author_admin`), the one side that sees whose account wrote it. */
+    if (c.author_admin) {
       head.appendChild(el('span', 'comment-admin', '(admin)'));
     }
     if (c.edited_at) head.appendChild(el('span', 'comment-edited', 'edited'));

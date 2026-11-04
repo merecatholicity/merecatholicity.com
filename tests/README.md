@@ -203,8 +203,9 @@ tests/
 
 ## Running
 
-**`make tests` must be green before any commit or push** (and before
-`make worker-deploy`). It's a standing gate: if a change turns a test red, fix
+**`make tests` must be green before a merge**: CI's `check` job runs it on every pull
+request, so the dev box does not (2026-11-04); run the one file you touched with
+`node --test <file>`, and the whole suite before `make worker-deploy`. It's a standing gate: if a change turns a test red, fix
 the code — or update the test in the same commit to document the new rule. Never
 delete a test to make a red build green.
 

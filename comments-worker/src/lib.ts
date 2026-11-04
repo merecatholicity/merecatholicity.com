@@ -617,6 +617,12 @@ export async function adminRoster(env: Env): Promise<string[]> {
   return roster.filter((h) => h !== MERECAT_BOT.hash);
 }
 
+/* The roster as a set, for stamping the "(admin)" mark on the rows a page of
+   posts serves (withNames' `admins`): one read per answer, never per row. */
+export async function adminSet(env: Env): Promise<Set<string>> {
+  return new Set(await adminRoster(env));
+}
+
 export function normalizePage(raw: unknown) {
   let p = String(raw || '').split('?')[0].split('#')[0];
   if (!p.startsWith('/')) return null;
@@ -1301,8 +1307,9 @@ export async function topicViewPayload(env: Env, topic: TopicRow, pRaw: unknown,
   const counts = await postCountsFor(env, [topic.author_hash, ...(replies.results || []).map((r) => r.author_hash)]);
   /* The reactions' tallies ride the public payload (a reaction is public); the
      viewer's OWN ride the keyed /reacts read, since this payload is cached. */
-  const head = await withNames({ id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, faith: topic.faith || null, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0, sticky: topic.sticky ? 1 : 0, readonly: topic.readonly ? 1 : 0, media_key: topic.media_key || null, media_expired: topic.media_expired || 0 }, counts[topic.author_hash] || 0, (h) => serveId(env, h));
-  const posts = await Promise.all((replies.results || []).map((r) => withNames(r, counts[r.author_hash || ''] || 0, (h) => serveId(env, h))));
+  const admins = await adminSet(env);
+  const head = await withNames({ id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, faith: topic.faith || null, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0, sticky: topic.sticky ? 1 : 0, readonly: topic.readonly ? 1 : 0, media_key: topic.media_key || null, media_expired: topic.media_expired || 0 }, counts[topic.author_hash] || 0, (h) => serveId(env, h), admins);
+  const posts = await Promise.all((replies.results || []).map((r) => withNames(r, counts[r.author_hash || ''] || 0, (h) => serveId(env, h), admins)));
   await stampReactions(env, 'post', [head].concat(posts), null);
   return {
     ok: true,
@@ -2362,7 +2369,8 @@ export const WALL_COMMENT_COLS = 'c.id, c.post_id, c.author_hash, pr.nick, pr.av
    own reaction in two batched reads, the same shape the board's posts carry. */
 export async function wallEnrich(env: Env, rows: readonly AuthoredRow[], me: string | null): Promise<AuthoredRow[]> {
   const counts = await postCountsFor(env, rows.map((r) => r.author_hash));
-  const out = await Promise.all(rows.map((r) => withNames(r, counts[r.author_hash || ''] || 0, (h) => serveId(env, h))));
+  const admins = await adminSet(env);
+  const out = await Promise.all(rows.map((r) => withNames(r, counts[r.author_hash || ''] || 0, (h) => serveId(env, h), admins)));
   await stampReactions(env, 'wall', out.filter((r) => r.post_id === undefined), me);
   await stampReactions(env, 'wallc', out.filter((r) => r.post_id !== undefined), me);
   return out;

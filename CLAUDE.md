@@ -34,7 +34,7 @@ only ever fast-forwarded. A migration ships in the pull request of the worker th
 1. **`main` takes no direct push** (the `main` ruleset in `terraform/github.tf`, no bypass): every change is a
    pull request, merged only when `build`, `check` and `plan` pass. Ship with `scripts/ship.sh` (branch → PR →
    auto-merge → wait); the PR's one bot comment (`ci_pr_report.py`) reports its checks, its deploy, a gate's wait.
-2. Before any commit: `make tests` must pass; `make jscheck` after any worker/client JS/TS edit.
+2. **CI's `check` job runs the gates** (`make tests`, `jscheck`, `check`): run only the test you touched, ship, fix what CI reports.
 3. **CI is the build of record** — the site artifact, the worker bundle and the PDFs in R2 are
    what the runner built. Local builds preview and run gates; their bytes do not ship. A local
    PDF that reads "rebuilt but unpublished" is the dev box differing from CI, not a reason to upload.

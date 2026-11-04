@@ -1,4 +1,4 @@
-/* The admin core every page needs: the built-in admin hint (ADMIN_HASHES), isAdmin and the admin-page gate, the moderation lines a topic's admin corner and a profile card carry (lock, shadow ban, IP block and reverse DNS, delete user, trust), the profile fingerprint, the admin profile editor. Eager: the board, the wall and the profile bind these.
+/* The admin core every page needs: isAdmin and the admin-page gate, the moderation lines a topic's admin corner and a profile card carry (lock, shadow ban, IP block and reverse DNS, delete user, trust), the profile fingerprint, the admin profile editor. Eager: the board, the wall and the profile bind these.
    Split out of client/admin.ts on 2026-09-16 (the six DM factories); every declaration
    moved verbatim. Names from the boot and the other modules are bound in bind(). */
 import type { Boot } from './boot';
@@ -24,8 +24,10 @@ export function installAdminCore(B: Boot) {
   let stampFresh: () => any;
   let state: any;
 
-  var ADMIN_HASHES = ['d1915a05c2583f437b1316971563b3c4c404cff016a016770d91af1f2645f7f6',
-    'c83c2b4d105771aafa662a26745ddd2172213ddf5b39d64dfb91f579b5e18b03'];
+  /* The built-in ADMIN_HASHES list is gone (2026-11-04): it held ACCOUNT hashes,
+     which no row or id on this side of the wire is, so every lookup in it missed.
+     A row says its own author is an admin (`author_admin`, stamped by the worker);
+     the pre-load hint is this device's last answer (comments.ts lastAdminAnswer). */
 
   function isAdmin() {
     return window.mcCore!.authIsAdmin(authSig());
@@ -433,5 +435,5 @@ export function installAdminCore(B: Boot) {
     state = B.state;
   }
   function run() { /* nothing of this module ran at the boot's top level */ }
-  return { bind, run, exports: { ADMIN_HASHES, adminGate, adminProfileEditor, annotateMeta, buildFingerprint, isAdmin, topicAdminCorner } };
+  return { bind, run, exports: { adminGate, adminProfileEditor, annotateMeta, buildFingerprint, isAdmin, topicAdminCorner } };
 }

@@ -20,7 +20,7 @@ build it (make) and ship it.
 
 ```sh
 # 1. edit sources — never the generated half of docs/ (see §7)
-make tests           # the unit suite — must pass before any commit
+make tests           # the unit suite — CI's `check` job runs it on every PR; locally, run only the test you touched
 make jscheck         # after ANY TypeScript edit (tsc over every project + psbuild)
 make check           # link check over the built site (needs a local build; CI does it anyway)
 git commit …         # on a branch, or in an agent worktree (scripts/agent_worktree.sh)

@@ -27,6 +27,7 @@ import {
   displayName,
   getAppSettings,
   mediaKindsFor,
+  adminSet,
   isAdminHash,
   isTrusted,
   journalArticle,
@@ -104,7 +105,8 @@ async function handleGet(request: Request, env: Env, url: URL) {
     "WHERE c.page = ?1 AND c.status = 'live' AND " + shadowExcl('c') + " ORDER BY c.id LIMIT 500"
   ).bind(page).all<AuthoredRow>();
   const counts = await postCountsFor(env, (rows.results || []).map((r) => r.author_hash));
-  const comments = await Promise.all((rows.results || []).map((r) => withNames(r, counts[r.author_hash || ''] || 0, (h) => serveId(env, h))));
+  const admins = await adminSet(env);
+  const comments = await Promise.all((rows.results || []).map((r) => withNames(r, counts[r.author_hash || ''] || 0, (h) => serveId(env, h), admins)));
   await stampReactions(env, 'post', comments, null);   // the tallies; the viewer's own ride /reacts
   return json({ ok: true, anon: env.ALLOW_ANON === 'true', comments: comments }, 200,
     cacheHeader(url));
@@ -324,6 +326,7 @@ async function handlePost(request: Request, env: Env, ctx: ExecutionContext) {
      comment renders with them at once, before any cache refresh. */
   const prof = authorHash ? await env.DB.prepare('SELECT nick, signature, avatar, faith FROM profiles WHERE hash = ?1').bind(authorHash)
     .first<{ nick: string | null; signature: string | null; avatar: string | null; faith: string | null }>() : null;
+  const authorAdmin = await isAdminHash(env, authorHash);   // the "(admin)" mark, as a read stamps it
 
   /* Live push: broadcast the fresh post to everyone watching this scope through
      the one board sink (broadcastBoard gates the back room). Only a live post is
@@ -341,7 +344,7 @@ async function handlePost(request: Request, env: Env, ctx: ExecutionContext) {
       const stat = await env.DB.prepare('SELECT replies, title FROM comments WHERE id = ?1').bind(topicId).first();
       return [
         { v: 1, t: 'new-reply', scopes: ['topic:' + topicId], topic_id: topicId,
-          comment: { id: inserted.id, author_hash: authorHash, nick,
+          comment: { id: inserted.id, author_hash: authorHash, author_admin: authorAdmin, nick,
             signature: prof && prof.signature || null, avatar: prof && prof.avatar || null,
             faith: prof && prof.faith || null, body, created_at: createdAt,
             media_key: media ? media.key : null } },
@@ -372,7 +375,7 @@ async function handlePost(request: Request, env: Env, ctx: ExecutionContext) {
   }
 
   return json(await cloakIds(env, { ok: true, status, comment: { id: inserted.id, title, author_hash: authorHash,
-    nick: prof && prof.nick || null, signature: prof && prof.signature || null, avatar: prof && prof.avatar || null,
+    author_admin: authorAdmin, nick: prof && prof.nick || null, signature: prof && prof.signature || null, avatar: prof && prof.avatar || null,
     faith: prof && prof.faith || null,
     body, created_at: createdAt, media_key: media ? media.key : null } }), 200);
 }
