@@ -89,7 +89,8 @@ PART_MARK_RE = re.compile(
 PARTNAV_RE = re.compile(r'<nav class="mc-partnav[^"]*"[^>]*>(.*?)</nav>', re.S)
 NAV_LINK_RE = re.compile(r'<a href="([^"]+)"([^>]*)>(.*?)</a>', re.S)
 MAIN_OPEN_RE = re.compile(r'<main class="prose[^"]*">')
-PANDOC = '<meta name="generator" content="pandoc"'
+# A prefix: a newer pandoc writes its version too (content="pandoc 3.11").
+PANDOC = '<meta name="generator" content="pandoc'
 
 HEADING_RE = re.compile(r'<h([1-6])\b([^>]*)>(.*?)</h\1>', re.S)
 ID_RE = re.compile(r'\bid="([^"]*)"')

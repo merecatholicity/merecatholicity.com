@@ -142,6 +142,7 @@ on page one.)
 - **Key rotation: the P0 chain's last piece, and the escape hatch the weak-key floor needed (2026-09-18)** — `log/2026-09.md`
 - **Nothing is JavaScript any more: the page scripts, the service worker, the tests and the two node scripts are TypeScript, and the kernel lost its one FFI file (2026-10-09)** — `log/2026-10.md`
 - **A Build cancelled by a newer merge no longer loses its changes, and merecat follows the Build that carries its commit (2026-10-09)** — `log/2026-10.md`
+- **The corpus sweeps know pandoc by its prefix, so a current pandoc builds the same site (2026-11-04)** — `log/2026-11.md`
 
 ### The PureScript application layer
 

@@ -149,6 +149,14 @@ class OneH1(unittest.TestCase):
         self.assertEqual(twice, once)
         self.assertEqual(did2, [])
 
+    def test_a_pandoc_that_names_its_version_is_still_pandoc(self):
+        """Ubuntu's pandoc writes content="pandoc"; a current one (3.11, the
+        Arch dev box, 2026-11-04) writes content="pandoc 3.11". Knowing only
+        the first left 232 pages unswept on that box and `make tests` red."""
+        out, did = m.process(PAGE.replace('content="pandoc"', 'content="pandoc 3.11"'))
+        self.assertIn('headings', did)
+        self.assertEqual(len(re.findall(r'<h1\b', out)), 1)
+
     def test_a_hand_page_is_not_touched(self):
         """Only pandoc pages are demoted: the hand pages already carry one h1
         and a heading scale the stylesheet styles directly."""
@@ -251,7 +259,7 @@ class EveryServedPage(unittest.TestCase):
         """The mark is what the stylesheet keys the reading scale to, and what
         the demotion reads as 'already done'."""
         for n, h in self.pages.items():
-            pandoc = '<meta name="generator" content="pandoc"' in h
+            pandoc = bool(m.PANDOC_RE.search(h))
             self.assertEqual(pandoc, 'class="prose corpus"' in h,
                              n + ': the corpus mark and the generator disagree')
 

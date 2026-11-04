@@ -47,7 +47,9 @@ npm ci             # the JS toolchain, from the lockfile
 make toolchain     # the PureScript compiler by pinned hash -> local/bin/purs
 # The private librarian shelf is a SEPARATE private repo, never a submodule. With access:
 #   git clone git@github.com:merecatholicity/private-shelf.git librarian/private
-make html          # book + library + content, then link-check
+make css bundle    # the stylesheet and the bundles
+make logos content # BEFORE html, as CI does: the linkcheck needs the .docx, the sweeps index.html
+make html          # book + library, the sweeps, then link-check
 make serve         # preview on 127.0.0.1:8000 (binds localhost only — load-bearing)
 ```
 
