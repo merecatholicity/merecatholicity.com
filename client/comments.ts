@@ -146,7 +146,6 @@ import type { Boot } from './boot';
      of state more than one module writes live on it outright (B.x). */
   const B: Boot = Object.create(null) as Boot;
   /* The modules' functions the root calls (the router, the kit): bound after install. */
-  let ADMIN_HASHES: any;
   let BLOCK_CONFIRM: any;
   let CATS: any;
   let MUTED_STORE: any;
@@ -1747,7 +1746,6 @@ import type { Boot } from './boot';
   /* a lazy module already fetched on this page installs like the rest (see LAZY_MODULES) */
   for (const name of Object.keys(lazyLoaded)) mods.push(LAZY_MODULES[name].install(lazyLoaded[name], B));
   for (const m of mods) Object.assign(B, m.exports);
-  ADMIN_HASHES = B.ADMIN_HASHES;
   BLOCK_CONFIRM = B.BLOCK_CONFIRM;
   CATS = B.CATS;
   MUTED_STORE = B.MUTED_STORE;
@@ -1858,7 +1856,7 @@ import type { Boot } from './boot';
     /* the unified member block (2026-08-03): one act = DM shadow-block + hide */
     isBlocked: isBlocked, setBlock: setBlock, appConfirm: appConfirm, BLOCK_CONFIRM: BLOCK_CONFIRM,
     authorNode: authorNode, profileHref: profileHref,
-    ADMIN_HASHES: ADMIN_HASHES, MERECAT_BOT_HASH: MERECAT_BOT_HASH,
+    MERECAT_BOT_HASH: MERECAT_BOT_HASH,
     setStatus: setStatus, startEdit: startEdit,
     quoteGrab: function (c: any) { B.quotedSelection = selectionInPost(c); },
     quoteTake: function (c: any, quoteCtx: any) {

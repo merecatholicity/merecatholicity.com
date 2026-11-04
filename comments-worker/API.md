@@ -285,6 +285,13 @@ is still `null` when unset (show `nick || assigned`). `rank` is the scriptorium
 label and rides wherever `posts` does (comments, topic view, `/profile`); the
 raw `posts` count is still there. `faith` is a raw code
 (`nicene`/`indo-european`/`seeker`) — resolve its label from `/config`.
+**`author_admin`** (2026-11-04) is true when the row's author is an admin, false
+otherwise: on a page comment, a topic head and its replies (the back room's
+too), a feed or member-wall post and its comments, the live `new-reply` frame's `comment` and a post's own answer. It is
+the server's word because only the server sees whose ACCOUNT wrote the row: a
+client holding a list of admin hashes cannot match it against `author_hash`,
+which is the public id. Other author rows (category lists, search, latest
+poster) do not carry it.
 
 **Search highlight.** `snip` wraps matched terms in `U+0002…U+0003`. Split on
 those control bytes into highlight spans; never display them raw, and never
