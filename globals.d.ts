@@ -54,6 +54,10 @@ declare global {
     /* mcKit is the per-boot ~55-helper bridge handed to the Lit views by reference;
        genuinely dynamic — indexed as any, with the stable fields named. */
     mcViews?: Record<string, (...args: any[]) => any>;
+    /* A late render's hold on its section (app/lazyviews.ts): the classic
+       lazyView takes one before its chunk wait and renders only if it still
+       holds, i.e. no newer route has cleared the section since. */
+    mcHoldSection?: (section: Node) => () => boolean;
     mcKit?: { state: any; API: string; [k: string]: any };
     /* `me` is this identity's PUBLIC id, the server's word (the P0 chain L3);
        the client cannot compute one, so it is carried here and cached. */
