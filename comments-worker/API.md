@@ -139,7 +139,8 @@ you RECEIVE is a pubid and every member id you SEND (a DM `to`, a mention, a
 block) must be the pubid you were served; the server resolves it back. Learn
 your OWN id from `/prefs`'s `me`, never by hashing your key. Gated behind the
 pepper: until it is set the wire carries raw hashes exactly as before (the
-valve), and an old `?u=<hash>` link is honoured for one deploy.
+valve). An account hash sent where an id is asked for names nobody: the one-deploy
+tolerance for old `?u=<hash>` links retired 2026-11-04.
 
 - **Generate:** 32 random bytes → base64url (`+`→`-`, `/`→`_`, strip `=`), ~43
   chars. (Web client: `crypto.getRandomValues` + `btoa`.) **Do this; do not let a

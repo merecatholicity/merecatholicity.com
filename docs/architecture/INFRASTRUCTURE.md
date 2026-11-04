@@ -280,5 +280,6 @@ on page one.)
 - **A cron step that hangs is worse than one that throws (2026-09-19).** — `log/2026-09.md`
 - **The first four retirements fall due: the like aliases, a pair's derived reaction fields and E1 on the wire are gone (2026-10-07)** — `log/2026-10.md`
 - **The workers ship what changed since their last deploy, and everything they are built from counts (2026-10-09)** — `log/2026-10.md`
+- **An account hash on the wire now names nobody: resolveId's raw-hash tolerance is retired (2026-11-04)** — `log/2026-11.md`
 
 <!-- infra-index:end -->

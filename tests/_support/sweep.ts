@@ -22,6 +22,7 @@
    Used by tests/worker/env_leak.test.ts (nothing leaks, and the calls reached
    the handlers) and scripts/response_shapes.ts (what each answer looks
    like). */
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
@@ -252,7 +253,11 @@ export const UPLOADS: Record<string, string> = {
 
 /* Extra body fields the generic body lacks, per route, so a call reaches the
    handler's work instead of its first refusal. A function gets (ids, who, me). */
-const pairKeys = (a: Person, b: Person): Record<string, string> => ({ [a.hash]: 'sealedforone', [b.hash]: 'sealedfortwo' });
+/* A member's id as a real client holds it: the pubid under the sweep's sentinel pepper. A raw
+   account hash on the wire addresses nobody (its tolerance retired 2026-11-04), so a road sent
+   one would answer "no such member" and never reach the egress this sweep is here to read. */
+export const wire = (p: Person): string => createHash('sha256').update(sentinel('PUBLIC_ID_PEPPER') + p.hash).digest('hex');
+const pairKeys = (a: Person, b: Person): Record<string, string> => ({ [wire(a)]: 'sealedforone', [wire(b)]: 'sealedfortwo' });
 const otherOf = (who: Who, me: Person | undefined): Person => (me === who.member ? who.admin : who.member);
 export const ROUTE_HINTS: Record<string, Hint> = {
   'POST /api/comments': (ids) => ({ topic: ids.topic, body: 'a sweep reply', title: '' }),
@@ -269,20 +274,20 @@ export const ROUTE_HINTS: Record<string, Hint> = {
      read `to` alone for six days while every client sent `with`, and this
      line, saying `to`, was green throughout. The road that proves the shape is
      tests/worker/dm_pair_target.test.ts (2026-09-19). */
-  'POST /api/comments/dm/send': (ids, who, me) => (me ? { with: otherOf(who, me).hash, body: 'E3.sweepword', enc: 3, keys: pairKeys(me, otherOf(who, me)) } : {}),
-  'POST /api/comments/dm/forward': (ids, who, me) => (me ? { items: [{ to: otherOf(who, me).hash, body: 'E3.sweepforward', enc: 3, keys: pairKeys(me, otherOf(who, me)) }] } : {}),
+  'POST /api/comments/dm/send': (ids, who, me) => (me ? { with: wire(otherOf(who, me)), body: 'E3.sweepword', enc: 3, keys: pairKeys(me, otherOf(who, me)) } : {}),
+  'POST /api/comments/dm/forward': (ids, who, me) => (me ? { items: [{ to: wire(otherOf(who, me)), body: 'E3.sweepforward', enc: 3, keys: pairKeys(me, otherOf(who, me)) }] } : {}),
   'POST /api/comments/dm/edit': (ids) => ({ id: ids.dm, body: 'E3.sweepedit', enc: 3 }),
   'POST /api/comments/dm/pubkey': () => ({ pubkey: 'A'.repeat(43) }),
   'POST /api/comments/profile/rekey': (ids) => ({ newkey: 'sweep-rekey-new-key-2026!', pubkey: 'A'.repeat(43), resealed: { [ids.dm]: 'S3.sweepreseal' } }),
-  'POST /api/comments/dm/presence': (ids, who, me) => (me ? { hashes: [who.member.hash, who.outsider.hash, who.admin.hash].filter((h) => h !== me.hash) } : {}),
+  'POST /api/comments/dm/presence': (ids, who, me) => (me ? { hashes: [who.member, who.outsider, who.admin].filter((x) => x !== me).map(wire) } : {}),
   'POST /api/comments/dm/ttl': (ids) => ({ thread_id: ids.thread, ttl: 86400 }),
   'POST /api/comments/dm/media/get': () => ({ media_key: PRIVATE['dm_media.key'].value }),
-  'POST /api/comments/dm/groups': (ids, who, me) => (me ? { members: [who.member.hash, who.outsider.hash, who.admin.hash].filter((h) => h !== me.hash), name: 'a new group' } : {}),
-  'POST /api/comments/dm/members': (ids, who) => ({ thread_id: ids.group, add: [who.outsider.hash] }),
+  'POST /api/comments/dm/groups': (ids, who, me) => (me ? { members: [who.member, who.outsider, who.admin].filter((x) => x !== me).map(wire), name: 'a new group' } : {}),
+  'POST /api/comments/dm/members': (ids, who) => ({ thread_id: ids.group, add: [wire(who.outsider)] }),
   'POST /api/comments/dm/leave': (ids) => ({ thread_id: ids.group }),
   'POST /api/comments/dm/name': (ids) => ({ thread_id: ids.group, name: 'a renamed group' }),
-  'POST /api/comments/call/offer': (ids, who, me) => ({ to: otherOf(who, me).hash, call: 'feedface00000000feedface00000000', sdp: 'v=0 a sweep offer' }),
-  'POST /api/comments/call/answer': (ids, who) => ({ to: who.admin.hash, call: ids.call, sdp: 'v=0 a sweep answer' }),
+  'POST /api/comments/call/offer': (ids, who, me) => ({ to: wire(otherOf(who, me)), call: 'feedface00000000feedface00000000', sdp: 'v=0 a sweep offer' }),
+  'POST /api/comments/call/answer': (ids, who) => ({ to: wire(who.admin), call: ids.call, sdp: 'v=0 a sweep answer' }),
   'POST /api/comments/call/end': (ids) => ({ call: ids.call, reason: 'hangup' }),
   'POST /api/comments/admin/discord/add': () => ({ feed_url: 'https://merecatholicity.com/api/comments/feed?cat=pub', hook_url: 'https://discord.com/api/webhooks/1234567890/sweep-added-hook', label: 'sweep' }),
   'POST /api/comments/ops/report': () => ({ probe: true }),
@@ -310,7 +315,7 @@ export const GET_MODES: [string, (ids: Partial<Ids>, who: Who) => Record<string,
   ['/api/comments/journal', (ids) => ({ id: String(ids.reply) })],
   ['/api/comments/board/topic', (ids) => ({ id: String(ids.topic), find: String(ids.reply) })],
   ['/api/comments/search', () => ({ q: 'body', sort: 'new' })],
-  ['/api/comments/search', (ids, who) => ({ author: who.member.hash })],
+  ['/api/comments/search', (ids, who) => ({ author: wire(who.member) })],
   ['/api/comments/profile', (ids) => ({ handle: ids.handle || 'sweepmember' })],
   ['/api/comments/board/cat', () => ({ cat: 'pub', q: 'sweep' })],
 ];
@@ -318,7 +323,7 @@ export const GET_MODES: [string, (ids: Partial<Ids>, who: Who) => Record<string,
 function query(ids: Ids, who: Who): string {
   const q = new URLSearchParams({
     id: String(ids.topic), topic: String(ids.topic), page: '/credo.html', cat: 'pub', p: '1', q: 'body',
-    hash: who.member.hash, author: who.member.hash, handle: ids.handle, u: who.member.hash, post: String(ids.wallPost),
+    hash: wire(who.member), author: wire(who.member), handle: ids.handle, u: wire(who.member), post: String(ids.wallPost),
     key: WALL_MEDIA.open,
   });
   return '?' + q.toString();
@@ -334,8 +339,8 @@ function body(route: Route, as: string, ids: Ids, who: Who): FormData | Row {
   }
   const base: Row = {
     id: ids.topic, topic: ids.topic, topic_id: ids.topic, comment_id: ids.reply, post: ids.wallPost, post_id: ids.wallPost,
-    comment: ids.wallComment, thread: ids.thread, thread_id: ids.thread, msg: ids.dm, msg_id: ids.dm, hash: who.member.hash,
-    to: who.member.hash, with: who.member.hash, peer: who.member.hash, target: who.member.hash, page: 'board:pub',
+    comment: ids.wallComment, thread: ids.thread, thread_id: ids.thread, msg: ids.dm, msg_id: ids.dm, hash: wire(who.member),
+    to: wire(who.member), with: wire(who.member), peer: wire(who.member), target: wire(who.member), page: 'board:pub',
     cat: 'pub', p: 1, q: 'body', call: ids.call, chat: ids.chat, kind: 'topic', ref: ids.topic,
   };
   if (me) base.key = me.key;

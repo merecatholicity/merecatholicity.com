@@ -1,8 +1,8 @@
 /* The pubid flip, end to end (the P0 chain L3, 2026-09-18). The egress sweep
  * (hash_leak) proves no account hash LEAVES; this proves the other direction —
  * that a client sending a PUBID back is resolved to the right member. The
- * hermetic suite otherwise sends raw hashes (which resolveId honours through its
- * one-deploy tolerance), so without this a missing resolveId at an ingress point
+ * hermetic suite otherwise runs without a pepper (the valve, where an id IS the
+ * hash), so without this a missing resolveId at an ingress point
  * would pass every other test and silently break that feature for a real client.
  *
  * With PUBLIC_ID_PEPPER set, a member's wire id is pubid = SHA-256(pepper||hash),
@@ -14,6 +14,7 @@
  * column. */
 import { test, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { loadWorker, makeEnv, freshDb, identity, establish, publishKey, call, resetCaches } from '../_support/worker.ts';
 import { pubidOf, resolveId, clearIdCaches } from '../../comments-worker/src/lib.ts';
 import type { Worker, TestEnv, Row } from '../_support/worker.ts';
@@ -43,7 +44,50 @@ test('a pubid is not the account hash, and resolveId inverts it from a read (no 
   assert.match(pid, /^[0-9a-f]{64}$/, 'but it is the same 64-hex shape');
   clearIdCaches();
   assert.equal(await resolveId(e, pid), ann.hash, 'the pubid resolves to the account hash');
-  assert.equal(await resolveId(e, ann.hash), ann.hash, 'and the raw hash still resolves (the tolerance)');
+  assert.equal(await resolveId(e, ann.hash), null, 'and a raw account hash is nobody (its tolerance retired 2026-11-04)');
+  db.close();
+});
+
+test('a member registered after the map loaded still resolves: a miss tops it up from the new profiles rows', async () => {
+  const db = freshDb();
+  const e = env(db);
+  establish(db, ann.hash);
+  assert.equal(await resolveId(e, await pub(ann.hash)), ann.hash, 'the map is built');
+  establish(db, bob.hash);   // bob arrives on another isolate; this one's map has never seen him
+  /* his pubid computed apart from lib.ts, so the module's caches never see it before the miss */
+  const bobPid = createHash('sha256').update(PEPPER + bob.hash).digest('hex');
+  assert.equal(await resolveId(e, bobPid), bob.hash, 'the miss reads the rows made since, and finds him');
+  assert.equal(await resolveId(e, bob.hash), null, 'his raw account hash still names nobody');
+  db.close();
+});
+
+test('a member is added to a group by PUBID: the handler hands dmEligible wire ids, never ones it resolved', async () => {
+  const db = freshDb();
+  const e = env(db);
+  const [cat] = await Promise.all(['cat'].map(identity));
+  for (const who of [ann, bob, cat]) { establish(db, who.hash); publishKey(db, who.hash); }
+  const g = await call(worker, e, 'POST', '/api/comments/dm/groups', { key: ann.key, members: [await pub(bob.hash), await pub(cat.hash)], name: 'g' });
+  assert.equal(g.status, 200, 'the group is made: ' + JSON.stringify(g.json));
+  const dan = await identity('dan');
+  establish(db, dan.hash); publishKey(db, dan.hash);
+  const r = await call(worker, e, 'POST', '/api/comments/dm/members', { key: ann.key, thread_id: g.json.thread_id, add: [await pub(dan.hash)] });
+  assert.equal(r.status, 200, 'dan is added by his pubid: ' + JSON.stringify(r.json));
+  const members = db.prepare('SELECT hash FROM dm_members WHERE thread_id = ? AND left_at IS NULL').all(g.json.thread_id).map((x: Row) => x.hash);
+  assert.ok(members.includes(dan.hash), 'and his ACCOUNT hash is on the roster');
+  db.close();
+});
+
+test('a raw account hash on the wire addresses nobody: no profile, no conversation', async () => {
+  const db = freshDb();
+  const e = env(db);
+  for (const who of [ann, bob]) { establish(db, who.hash); publishKey(db, who.hash); }
+  db.prepare("UPDATE profiles SET nick = 'Ann' WHERE hash = ?").run(ann.hash);
+  const prof = await call(worker, e, 'GET', '/api/comments/profile?hash=' + ann.hash);
+  assert.ok(!(prof.json && prof.json.profile && prof.json.profile.nick === 'Ann'), 'the account hash finds no profile: ' + JSON.stringify(prof.json));
+  const th = await call(worker, e, 'POST', '/api/comments/dm/thread', { key: bob.key, with: ann.hash });
+  assert.equal(th.status, 400, 'and opens no conversation (it names no one, so it is no member id at all): ' + JSON.stringify(th.json));
+  const ok = await call(worker, e, 'POST', '/api/comments/dm/thread', { key: bob.key, with: await pub(ann.hash) });
+  assert.equal(ok.status, 200, 'while her pubid does: ' + JSON.stringify(ok.json));
   db.close();
 });
 

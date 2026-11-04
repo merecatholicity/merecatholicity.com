@@ -353,8 +353,8 @@ export async function sha256hex(text: string) {
      serveId(hash)   -> the pubid to PUT ON the wire (egress). Deterministic;
                         also fills the reverse map so resolveId can undo it.
      resolveId(id)   -> the account hash a wire id names (ingress), or null for
-                        an id no member wears. Accepts an OLD raw hash too, for
-                        one deploy, so shared `?u=<hash>` links do not break.
+                        an id no member wears — a raw account hash included
+                        (its one-deploy tolerance retired 2026-11-04).
 
    SAFETY VALVE: with no pepper set, serveId returns the raw hash and resolveId
    treats its input as one — i.e. exactly the pre-layer-3 behaviour. So the code
@@ -365,10 +365,11 @@ export async function sha256hex(text: string) {
 const _h2p = new Map<string, string>();   // hash  -> pubid (per isolate)
 const _p2h = new Map<string, string>();   // pubid -> hash
 let _revLoaded = false;                    // the reverse map is built once per isolate
+let _revRowid = 0;                         // the newest profiles rowid the map has seen
 
 /* Test seam: the caches persist across a worker instance; a hermetic test that
    swaps the pepper (or the db) must clear them, as it clears appSettingsCache. */
-export function clearIdCaches() { _h2p.clear(); _p2h.clear(); _revLoaded = false; }
+export function clearIdCaches() { _h2p.clear(); _p2h.clear(); _revLoaded = false; _revRowid = 0; }
 
 /* The pubid for a hash — pure and deterministic, cached. No D1. Returns the raw
    hash when no pepper is set (the valve). */
@@ -405,19 +406,22 @@ async function loadRevMap(env: Env): Promise<void> {
   const add = (rows: { results?: Array<{ h: string | null }> } | null) => {
     for (const r of (rows && rows.results) || []) if (r.h && /^[0-9a-f]{64}$/.test(r.h)) hashes.add(r.h);
   };
+  const top = await env.DB.prepare('SELECT MAX(rowid) AS r FROM profiles').first<{ r: number | null }>();
   add(await env.DB.prepare('SELECT hash AS h FROM profiles').all<{ h: string | null }>());
   for (const [tbl, col] of [['comments', 'author_hash'], ['wall_posts', 'author_hash'], ['dms', 'sender_hash'], ['dm_members', 'hash']]) {
     try { add(await env.DB.prepare('SELECT DISTINCT ' + col + ' AS h FROM ' + tbl + ' WHERE ' + col + ' IS NOT NULL').all<{ h: string | null }>()); } catch (e) { /* a table a deployment predates */ }
   }
   for (const h of hashes) { const pid = await pubidOf(env, h); _p2h.set(pid, h); }
+  _revRowid = Math.max(_revRowid, Number(top && top.r) || 0);
   _revLoaded = true;
 }
 
 /* Ingress: the account hash a wire id names, or null. A pubid resolves through
-   the read-built reverse map; an id absent from it but present as a raw
-   `profiles.hash` is honoured for one deploy (an old `?u=<hash>` link) — drop
-   that arm once the tolerance is due (tests/_support/retirements.json). With no
-   pepper, the id IS the hash. */
+   the read-built reverse map; a miss tops the map up from the profiles rows made
+   since it was built (a member registered after this isolate loaded it) — one
+   read, as the retired raw-hash lookup was, and never a write. A raw account
+   hash on the wire is simply unknown (its tolerance retired 2026-11-04). With
+   no pepper, the id IS the hash. */
 export async function resolveId(env: Env, id: string | null | undefined): Promise<string | null> {
   if (!id || !/^[0-9a-f]{64}$/.test(String(id))) return null;
   const wire = String(id);
@@ -425,10 +429,12 @@ export async function resolveId(env: Env, id: string | null | undefined): Promis
   await loadRevMap(env);
   const hit = _p2h.get(wire);
   if (hit) return hit;
-  /* the tolerance, and a net for a member registered after the map loaded: an
-     id that IS a live account hash resolves to itself */
-  const row = await env.DB.prepare('SELECT hash FROM profiles WHERE hash = ?1 LIMIT 1').bind(wire).first<{ hash: string }>();
-  return row && row.hash ? row.hash : null;
+  const fresh = await env.DB.prepare('SELECT rowid AS r, hash AS h FROM profiles WHERE rowid > ?1').bind(_revRowid).all<{ r: number; h: string | null }>();
+  for (const row of fresh.results || []) {
+    if (row.h && /^[0-9a-f]{64}$/.test(row.h)) await pubidOf(env, row.h);
+    _revRowid = Math.max(_revRowid, Number(row.r) || 0);
+  }
+  return _p2h.get(wire) || null;
 }
 
 /* Fill `profiles.pubid` for every member and every orphan identity (a hash that
@@ -897,7 +903,7 @@ export async function deliverNotifications(env: Env, o: BoardNotice) {
       for (const m of o.mentions) {
         /* a mention arrives as a pubid (the P0 chain L3) — resolve it to the
            account hash the inbox is keyed by; an unknown id notifies nobody */
-        const h = (await resolveId(env, String(m || '').toLowerCase())) || String(m || '').toLowerCase();
+        const h = (await resolveId(env, String(m || '').toLowerCase())) || '';
         // the librarian holds no inbox: its hash never receives a notification
         if (/^[0-9a-f]{64}$/.test(h) && h !== o.authorHash && h !== MERECAT_BOT.hash &&
             mentions.indexOf(h) === -1) mentions.push(h);
@@ -1448,10 +1454,12 @@ export async function dmThreadFor(env: Env, me: string, data: Body | null): Prom
      which then looked for a pair_key built from an id no ledger row holds — an
      unmade room answered with a correspondent who had no published key, so a
      brand-new conversation's composer said "waiting for this member to sign in"
-     about someone who had. An id that resolves to nothing stays as it came (an
-     unknown correspondent is simply no conversation), and a caller that already
-     resolved hands an account hash straight back through. */
-  const other = (await resolveId(env, wire)) || wire;
+     about someone who had. An id that resolves to nothing is no conversation (an
+     unknown correspondent is simply nobody — a raw account hash
+     included, since its tolerance retired 2026-11-04), and every caller hands
+     the WIRE id here, never one it resolved itself. */
+  const other = await resolveId(env, wire);
+  if (!other) return null;
   if (other === me) return null;
   const t = await env.DB.prepare('SELECT ' + DM_THREAD_COLS + ' FROM dm_threads t ' + DM_MINE + ' WHERE t.pair_key = ?2').bind(me, dmPairKey(me, other)).first<DmThreadRow>();
   return { thread: t || null, other };
@@ -2385,7 +2393,7 @@ export async function deliverWallNotifications(env: Env, o: { authorHash: string
     let count = 0;
     for (const m of o.mentions) {
       /* a pubid on the wire (L3) -> the account hash the inbox is keyed by */
-      const h = (await resolveId(env, String(m || '').toLowerCase())) || String(m || '').toLowerCase();
+      const h = (await resolveId(env, String(m || '').toLowerCase())) || '';
       if (/^[0-9a-f]{64}$/.test(h) && !seen.has(h) && count < 10) { add(h, false); count += 1; }
     }
   }
