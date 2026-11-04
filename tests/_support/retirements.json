@@ -4,16 +4,16 @@
   "where": "comments-worker/src/lib.ts",
   "pattern": "SELECT hash FROM profiles WHERE hash = \\?1 LIMIT 1'\\)\\.bind\\(wire\\)",
   "since": "2026-09-18",
-  "due": "2026-11-02",
-  "how": "once every shared `profile.html?u=<hash>` link and push `?dm=<hash>` URL minted before the L3 flip has aged out (30 days), drop resolveId's trailing raw-hash lookup so only a pubid resolves; an account hash on the wire is then simply unknown. — moved from 2026-10-18 on 2026-10-19: the same lookup is also the net for a member registered after the reverse map loaded (lib.ts resolveId), so retiring it needs a `pubid = ?1` lookup in its place, an identity change for its own pull request and /security-review, not a line deleted under a red build."
+  "due": "2026-12-04",
+  "how": "once every shared `profile.html?u=<hash>` link and push `?dm=<hash>` URL minted before the L3 flip has aged out (30 days), drop resolveId's trailing raw-hash lookup so only a pubid resolves; an account hash on the wire is then simply unknown. — moved from 2026-10-18 on 2026-10-19: the same lookup is also the net for a member registered after the reverse map loaded (lib.ts resolveId), so retiring it needs a `pubid = ?1` lookup in its place, an identity change for its own pull request and /security-review, not a line deleted under a red build. — moved from 2026-11-02 on 2026-11-04: the pubid = ?1 lookup that must replace it has not been written; it is an identity change for its own pull request and /security-review, and the overdue entry had turned every pull request red."
  },
  {
   "what": "weakKeyTolerated — a WEAK identity key that already has history behind it may still write",
   "where": "comments-worker/src/lib.ts",
   "pattern": "function weakKeyTolerated\\(",
   "since": "2026-09-18",
-  "due": "2026-11-02",
-  "how": "delete weakKeyTolerated() and the `known && weakKeyTolerated()` clause in keyFloor, so the floor holds for EVERY write. A weak-key member is no longer locked out: key rotation (POST /profile/rekey, 2026-09-18) lets them move to a strong key with their content, so on the due date a weak key is refused a write and told to rotate. Run scripts/key_audit.py first and give any cracked member a heads-up to rotate; move this date only if one cannot be reached in time. — moved from 2026-10-18 on 2026-10-19: scripts/key_audit.py has not been run and no weak-key member has had the heads-up yet; both come first."
+  "due": "2026-12-04",
+  "how": "delete weakKeyTolerated() and the `known && weakKeyTolerated()` clause in keyFloor, so the floor holds for EVERY write. A weak-key member is no longer locked out: key rotation (POST /profile/rekey, 2026-09-18) lets them move to a strong key with their content, so on the due date a weak key is refused a write and told to rotate. Run scripts/key_audit.py first and give any cracked member a heads-up to rotate; move this date only if one cannot be reached in time. — moved from 2026-10-18 on 2026-10-19: scripts/key_audit.py has not been run and no weak-key member has had the heads-up yet; both come first. — moved from 2026-11-02 on 2026-11-04: scripts/key_audit.py has still not been run and no weak-key member has had the heads-up; the owner's call, made with CI red on every pull request because of it."
  },
  {
   "what": "the legacy actor_hash clause: a DM bell from before 0016 named its sender, not its thread",
