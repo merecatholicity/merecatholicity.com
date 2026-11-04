@@ -7,7 +7,6 @@ export function installProfile(B: Boot) {
   /* Names this module takes from the boot — the root's helpers and the other
      modules' exports — bound in bind() once every module is installed, so
      order of installation never matters and every body reads as it did. */
-  let ADMIN_HASHES: any;
   let API: any;
   let BOARD: any;
   let DM_CACHE: any;
@@ -178,13 +177,19 @@ export function installProfile(B: Boot) {
   }
 
   /* Admin status comes from the server (state.myAdmin, off your own profile).
-     Before that profile has loaded the built-in list is only a hint, so a known
-     admin's controls are not withheld for a beat; once it loads the server is
-     the sole authority, so an admin removed elsewhere loses the controls here
-     too. The board re-renders when the answer changes (see loadMyProfile). */
+     Before that profile has loaded, this device's last answer for the key is
+     only a hint (state.adminHint), so a known admin's controls are not
+     withheld for a beat; once it loads the server is the sole authority, so an
+     admin removed elsewhere loses the controls here too. The board re-renders
+     when the answer changes (see loadMyProfile).
+     The hint was the built-in ADMIN_HASHES list looked up by state.myHash
+     until 2026-11-04. That list holds ACCOUNT hashes and myHash has been the
+     PUBLIC id since the P0 chain, so it never matched: every admin's boot read
+     "not an admin" until the profile landed, then redrew the whole board, and
+     a lazy view caught mid-load mounted twice. */
   function authSig() {
     return { hasKey: state.key, hasHash: state.myHash, profileLoaded: state.profileLoaded,
-      myAdmin: state.myAdmin, hint: ADMIN_HASHES.indexOf(state.myHash) !== -1 };
+      myAdmin: state.myAdmin, hint: state.adminHint };
   }
   /* A resolved, logged-in member (key + hash). Single-sources the "is member"
      decision (Domain.Auth.isMember) that was inlined as the raw key-and-hash
@@ -1386,7 +1391,6 @@ export function installProfile(B: Boot) {
     section.parentNode!.insertBefore(bar, section);
   }
   function bind() {
-    ADMIN_HASHES = B.ADMIN_HASHES;
     API = B.API;
     BOARD = B.BOARD;
     DM_CACHE = B.DM_CACHE;

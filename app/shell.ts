@@ -38,6 +38,7 @@ import { installCall } from './call.ts';
 import { installPtr } from './ptr.ts';
 import { installHaptic } from './haptic.ts';
 import { installBadges } from './badges.ts';
+import { installLazyViews, holdSection } from './lazyviews.ts';
 import { installChrome } from './appchrome.ts';
 import { installPushHeal } from './push.ts';
 import './richtext.js';
@@ -59,13 +60,9 @@ import './views/board.js';
    client/board.ts calls for its RETURN VALUE synchronously; it cannot answer
    with a promise.
 
-   The mechanism: each registry entry starts as a stub that fetches its module.
-   The module overwrites its own entry as it evaluates, and the stub then calls
-   THAT. If it somehow failed to register, the stub returns rather than calling
-   itself for ever. Nothing upstream changes shape — the classic client already
-   reaches these through `lazyView` (client/comments.ts), which returns a
-   promise and resolves it in the router, so an entry answering with a promise
-   is exactly what that road expects. */
+   The mechanism, each entry a stub that fetches its module and then calls it,
+   is app/lazyviews.ts, with the hold that lets a late mount land only for the
+   route that asked for it (2026-11-04). */
 const LAZY_VIEWS: Record<string, () => Promise<unknown>> = {
   adminHome: () => import('./views/admin.ts'),
   merecatThreads: () => import('./views/admin.ts'),
@@ -79,18 +76,10 @@ const LAZY_VIEWS: Record<string, () => Promise<unknown>> = {
   inbox: () => import('./views/profile.ts'),
 };
 window.mcViews = window.mcViews || {};
-for (const key of Object.keys(LAZY_VIEWS)) {
-  let pending: Promise<unknown> | null = null;
-  const stub = function (...args: unknown[]) {
-    pending = pending || LAZY_VIEWS[key]();
-    return pending.then(function () {
-      const fn = window.mcViews![key];
-      if (fn === stub) return undefined;
-      return fn.apply(null, args);
-    });
-  };
-  window.mcViews[key] = stub;
-}
+installLazyViews(window.mcViews, LAZY_VIEWS, document);
+/* The same hold for the classic client's own lazy road (`lazyView` in
+   client/comments.ts), which bundles separately and so cannot import it. */
+window.mcHoldSection = function (section) { return holdSection(section, document); };
 
 /* Shell-owned window seams (only referenced here among the typed files;
    declared locally to keep them off the shared globals.d.ts). */

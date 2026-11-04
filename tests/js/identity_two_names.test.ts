@@ -63,6 +63,26 @@ test('the public id is read from /prefs `me`, and cached under one key only', ()
   assert.match(setKey.slice(setKey.indexOf('function clearKey')), /setMyId\(''\)/, 'clearKey too');
 });
 
+test('the pre-load admin hint is not the account-hash list looked up by the public id', () => {
+  /* ADMIN_HASHES holds ACCOUNT hashes (the worker's bootstrap owners) and
+     state.myHash is the PUBLIC id, so the lookup was never true. Every admin's
+     boot read "not an admin" until the profile landed, then redrew the whole
+     board, and that redraw mounted a lazy thread twice on 2026-11-04
+     (tests/js/lazy_mount.test.ts). The hint is this device's last answer for
+     the key, and a new key drops it along with the public id. */
+  for (const [path, src] of sources()) {
+    assert.doesNotMatch(src, /ADMIN_HASHES\s*\.\s*(?:indexOf|includes)\(\s*(?:state\.)?my(?:Hash|Id)\b/,
+      path + ' looks the reader\'s public id up in a list of account hashes');
+  }
+  const prof = read('client/profile.ts');
+  const sig = prof.slice(prof.indexOf('function authSig'), prof.indexOf('function isMember'));
+  assert.match(sig, /hint: state\.adminHint/, 'the hint is the stored answer');
+  const src = read('client/comments.ts');
+  const setKey = src.slice(src.indexOf('function setKey'), src.indexOf('function clearKey'));
+  assert.match(setKey, /removeItem\('mc-admin'\)/, 'a new key does not inherit the old one\'s answer');
+  assert.match(setKey, /state\.adminHint = false/, 'nor does this boot');
+});
+
 test('hub routing is handed the ACCOUNT hash, never the public id', () => {
   for (const [path, src] of sources()) {
     const m = src.match(/member\.enable\(([^)]*)\)/g) || [];

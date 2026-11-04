@@ -524,11 +524,19 @@ import type { Boot } from './boot';
     if (window.mcStore) window.mcStore.invalidate();
     try { localStorage.setItem(STORAGE, key); } catch (e) {}
     setMyId('');            // the public id belongs to the OLD key: never carry it over
+    try { localStorage.removeItem('mc-admin'); } catch (e) {}   // and so does its admin answer
+    state.adminHint = false;
   }
   function clearKey() {
     try { localStorage.removeItem(STORAGE); } catch (e) {}
     try { localStorage.removeItem('mc-admin'); } catch (e) {}
     setMyId('');
+  }
+  /* What this device last heard from the server about this key's admin status
+     (loadMyProfile writes the flag, setKey and clearKey drop it): the pre-load
+     hint authSig carries, read once per boot. */
+  function lastAdminAnswer() {
+    try { return localStorage.getItem('mc-admin') === '1'; } catch (e) { return false; }
   }
 
   /* ---- The two identities, which are NOT the same thing (2026-09-19) -------
@@ -629,6 +637,7 @@ import type { Boot } from './boot';
     myHash: '',
     myNick: '',
     myAdmin: false,
+    adminHint: lastAdminAnswer(),
     profileLoaded: false,
     started: false,
     tokenWait: null,
@@ -1723,8 +1732,14 @@ import type { Boot } from './boot';
   };
   /* a view from a lazy module: load, then open — unless this boot is no longer the one on screen */
   function lazyView(mod: string, name: string, ...args: unknown[]) {
+    /* One render per route (2026-11-04): the router can run again while the
+       chunk is in flight, and a render landing in a section cleared since then
+       belongs to a route that is gone. Even an installed module answers a
+       microtask late, after an admin's profile redraw, so it rendered twice.
+       The same hold the shell's lazy views take (app/lazyviews.ts). */
+    var held = window.mcHoldSection!(section);
     return B.ensure(mod).then(function () {
-      if (bootSig.aborted || typeof B[name] !== 'function') return;
+      if (!held() || bootSig.aborted || typeof B[name] !== 'function') return;
       return B[name].apply(null, args);
     });
   }
