@@ -133,9 +133,10 @@ test('keyFloor: a weak key with history behind it still writes until its due dat
   const ledger = JSON.parse(readFileSync(join(root, 'tests', '_support', 'retirements.json'), 'utf8'));
   const entry = ledger.find((e: Row) => /weakKeyTolerated/.test(e.pattern));
   assert.ok(entry, 'the tolerance is named in the retirement ledger');
-  /* moved once, from 2026-10-18 (2026-10-19): the key audit and the members'
-     heads-up come first. A move is a change to this line too, never silent. */
-  assert.equal(entry.due, '2026-11-02');
+  /* moved twice, from 2026-10-18 (2026-10-19) and from 2026-11-02 (2026-11-04):
+     the key audit and the members' heads-up come first. A move is a change to
+     this line too, never silent. */
+  assert.equal(entry.due, '2026-12-04');
   db.close();
 });
 
