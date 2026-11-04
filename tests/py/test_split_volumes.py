@@ -199,6 +199,14 @@ class WhateverPandocCallsIt(unittest.TestCase):
         self.assertIn('</aside>', parts[0][1])
         self.assertIn('<li value="1" id="fn1">', parts[0][1])
 
+    def test_a_pandoc_that_names_its_version_is_still_pandoc(self):
+        """The runner's pandoc writes content="pandoc"; a current one writes
+        content="pandoc 3.11" (the Arch dev box, 2026-11-04). Knowing only the
+        first split nothing on that box."""
+        page = volume([('One', 1, long_text(120)), ('Two', 1, long_text(120))])
+        page = page.replace('content="pandoc"', 'content="pandoc 3.11"')
+        self.assertIsNotNone(m.split('v.html', page))
+
     def test_a_volume_it_cannot_serve_whole_is_left_whole(self):
         """THE safety valve. Every rewrite here is invisible until a reader
         clicks, so each part is asked whether it can answer its own references

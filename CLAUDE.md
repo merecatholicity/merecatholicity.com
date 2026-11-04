@@ -91,8 +91,8 @@ CODEBASE.md's; `librarian/private/` is a separate PRIVATE clone, never a submodu
   `pdf` · `migrate` · `serve` (binds 127.0.0.1 only — load-bearing) · the rest: README's target reference.
 - Builds are pinned to `SOURCE_DATE_EPOCH=1784160000` and byte-deterministic: a double
   `make bundle` must leave `docs/app.js` unchanged. Toolchain is npm (`npm ci` only, never `sudo`
-  or `-g`; esbuild exact-pinned, purs by pinned sha256 — `make toolchain`); this dev box is Ubuntu/WSL2 (Node 24 in `~/.local`, a
-  `python` shim — the toolchain memory). Every pandoc call in a resources loop ends `|| exit 1`.
+  or `-g`; esbuild exact-pinned, purs by pinned sha256 — `make toolchain`); this dev box is Arch (Node 26, pandoc 3.11 — newer
+  than CI's: the corpus sweeps match pandoc by prefix; terraform 1.16 in `~/.local/bin`). Every pandoc call in a resources loop ends `|| exit 1`.
 
 ## Laws that break silently
 

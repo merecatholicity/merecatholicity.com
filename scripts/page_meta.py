@@ -56,7 +56,9 @@ SKIP = {'turnstile.html', 'away.html'}
 
 OG_URL_RE = re.compile(r'<meta property="og:url" content="([^"]*)"')
 HTML_TAG_RE = re.compile(r'<html\b([^>]*)>', re.I)
-PANDOC_RE = re.compile(r'<meta name="generator" content="pandoc"')
+# Ubuntu's pandoc writes content="pandoc", a newer one content="pandoc 3.11":
+# match the prefix, or a dev box on a current pandoc skips every page.
+PANDOC_RE = re.compile(r'<meta name="generator" content="pandoc[ "]')
 MAIN_OPEN_RE = re.compile(r'<main class="prose">')
 # either kind of contents: a volume's own, or the contents of a part that a
 # split volume left with one (scripts/split_volumes.py)
