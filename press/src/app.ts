@@ -1,7 +1,8 @@
 // The browser half: take over the server-rendered page and navigate without reloads.
 // The catalogue rides the page itself (#press-data), so a hop fetches nothing.
 import { render } from "lit";
-import type { Catalogue } from "./types.ts";
+import { hydrate } from "@lit-labs/ssr-client";
+import type { Catalogue, Route } from "./types.ts";
 import { metaOf, page, routeOf } from "./views.ts";
 
 const dataEl = document.getElementById("press-data");
@@ -16,6 +17,11 @@ if (dataEl && root) {
   const show = (path: string, hop: boolean) => {
     const route = routeOf(path, cat);
     render(page(route, cat), root);
+    head(route, hop);
+  };
+
+  /** The head and the focus follow the page: title, description, canonical, link preview. */
+  const head = (route: Route, hop: boolean) => {
     const meta = metaOf(route, cat);
     document.title = meta.title;
     const url = new URL(meta.path, cat.press.url).href;
@@ -31,9 +37,11 @@ if (dataEl && root) {
     }
   };
 
-  // The server's markup is the same page; replace it once with the live render.
-  root.replaceChildren();
-  show(location.pathname, false);
+  // The server's markup is this same template: adopt it in place rather than redraw it, so
+  // nothing the first paint showed (a cover mid-load) is thrown away and fetched again.
+  const first = routeOf(location.pathname, cat);
+  hydrate(page(first, cat), root);
+  head(first, false);
 
   document.addEventListener("click", e => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
