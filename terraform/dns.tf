@@ -1,6 +1,7 @@
-# All 18 records. The apex A/AAAA set and the www CNAME point at GitHub Pages;
-# audio -> R2; contact-api is the worker custom-domain placeholder; the MX/SPF/
-# DMARC/DKIM set belongs to Email Routing.
+# All 20 records. The apex A/AAAA set and the www CNAME point at GitHub Pages;
+# audio and files -> R2; contact-api is the worker custom-domain placeholder;
+# press is the Lérins Press worker's route host; the MX/SPF/DMARC/DKIM set
+# belongs to Email Routing.
 
 resource "cloudflare_dns_record" "pages_aaaa_8001" {
   comment         = null
@@ -173,6 +174,27 @@ resource "cloudflare_dns_record" "contact_api" {
   content         = "100::"
   data            = null
   name            = "contact-api.merecatholicity.com"
+  priority        = null
+  private_routing = null
+  proxied         = true
+  settings = {
+  }
+  tags    = []
+  ttl     = 1
+  type    = "AAAA"
+  zone_id = var.zone_id
+}
+
+# Lérins Press (2026-11-11): press.merecatholicity.com is served by the
+# `lerins-press` worker (press/wrangler.jsonc), a static-assets Worker on a zone
+# ROUTE, not a custom domain. A route needs a proxied record under it, and the
+# record is declared here rather than made by wrangler. 100:: is the discard
+# prefix Cloudflare's own docs give for a host that only a Worker answers.
+resource "cloudflare_dns_record" "press" {
+  comment         = "Lérins Press: the lerins-press worker's route (press/wrangler.jsonc)"
+  content         = "100::"
+  data            = null
+  name            = "press.merecatholicity.com"
   priority        = null
   private_routing = null
   proxied         = true
