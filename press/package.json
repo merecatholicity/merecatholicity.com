@@ -17,6 +17,7 @@
     "@lit-labs/ssr": "4.1.0",
     "@types/node": "24.19.2",
     "esbuild": "0.28.2",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "wrangler": "4.156.0"
   }
 }

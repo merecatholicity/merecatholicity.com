@@ -2,7 +2,8 @@
    look, copied from styles/main.css there: the press is a separate site, so it keeps its
    own copy rather than importing the main stylesheet. */
 /* Cinzel (SIL OFL 1.1, @fontsource/cinzel): the Trajan capitals of the logo's wordmark,
-   used for the press's name and nothing else. The build copies the files beside this. */
+   used for the press's name and nothing else. The build puts the file under its hash and
+   rewrites this URL to it. */
 @font-face {
   font-family: "Cinzel";
   font-weight: 500;

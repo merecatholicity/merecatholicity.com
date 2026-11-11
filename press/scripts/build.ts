@@ -48,14 +48,17 @@ const jsText = js.outputFiles[0].text;
 const jsName = `assets/app-${hash(jsText)}.js`;
 writeFileSync(join(DIST, jsName), jsText);
 
-const css = read("src/press.css");
+// The wordmark's face, named by its hash like everything under assets/ (static/_headers
+// makes those immutable). The stylesheet names it by a placeholder the build fills.
+const FONTS = join(ROOT, "node_modules/@fontsource/cinzel");
+const font = readFileSync(join(FONTS, "files/cinzel-latin-500-normal.woff2"));
+const fontName = `assets/cinzel-500-${hash(font)}.woff2`;
+writeFileSync(join(DIST, fontName), font);
+cpSync(join(FONTS, "LICENSE"), join(DIST, "assets/cinzel-OFL.txt"));
+
+const css = read("src/press.css").replaceAll("/assets/fonts/cinzel-latin-500-normal.woff2", `/${fontName}`);
 const cssName = `assets/press-${hash(css)}.css`;
 writeFileSync(join(DIST, cssName), css);
-
-const FONTS = join(ROOT, "node_modules/@fontsource/cinzel");
-mkdirSync(join(DIST, "assets/fonts"));
-cpSync(join(FONTS, "files/cinzel-latin-500-normal.woff2"), join(DIST, "assets/fonts/cinzel-latin-500-normal.woff2"));
-cpSync(join(FONTS, "LICENSE"), join(DIST, "assets/fonts/OFL.txt"));
 
 cpSync(join(ROOT, "content/covers"), join(DIST, "covers"), { recursive: true });
 cpSync(join(ROOT, "static"), DIST, { recursive: true });
@@ -84,7 +87,7 @@ function document(route: Route): string {
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.png" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="preload" href="/assets/fonts/cinzel-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/${fontName}" as="font" type="font/woff2" crossorigin>
 <link rel="alternate" type="application/rss+xml" title="${esc(press.name)}" href="/rss.xml">
 <link rel="stylesheet" href="/${cssName}">
 <script type="module" src="/${jsName}"></script>

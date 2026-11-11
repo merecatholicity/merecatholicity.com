@@ -6,11 +6,14 @@
 #   make check    type-check src/ and scripts/
 #   make covers   make each cover's .jpg (feeds, link previews) from its .avif
 #   make brand    cut the shield out of the logo and make the icons and the preview image
+#   make deploy   build, then deploy dist/ to press.merecatholicity.com. CI's road
+#                 (.github/workflows/press.yml): needs CLOUDFLARE_API_TOKEN.
+#   make dry-run  build, then check the deploy without credentials (what a pull request runs)
 #   make clean    remove dist/
 PORT ?= 8090
 export PORT
 
-.PHONY: run build check covers brand clean
+.PHONY: run build check covers brand deploy dry-run clean
 
 node_modules/.package-lock.json: package.json package-lock.json
 	npm ci --no-audit --no-fund
@@ -24,6 +27,12 @@ run: build
 
 check: node_modules/.package-lock.json
 	npx tsc -p tsconfig.json
+
+deploy: build
+	npx wrangler deploy
+
+dry-run: build
+	npx wrangler deploy --dry-run
 
 covers:
 	@for f in content/covers/*.avif; do \

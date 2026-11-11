@@ -257,7 +257,7 @@ rule brings its test in the same change; never delete a test to go green.
   `docs/pdfs.txt` is the manifest; `scripts/publish_pdfs.py` publishes and verifies.
 - **Workers**: `comments-worker` (`/api/comments*`, `/api/merecat*`, `/@*`; D1 + three librarian
   rooms; R2 avatars/backups/dm-media/wall-media; Vectorize; Workers AI; two Durable Objects; four
-  crons) and `contact-worker` (`contact-api.merecatholicity.com`). `wrangler.jsonc` is the truth.
+  crons), `contact-worker` (`contact-api.`), `lerins-press` (`press/`: static assets, own npm, `press.yml`). `wrangler.jsonc` is the truth.
 - **merecat**, the librarian: a `ChatRoom` DO state machine, five-legged retrieval over three D1
   rooms + Vectorize, `librarian/` its mind, Workers AI its only backend, dials `Domain.Merecat`.
   **Band weighting and persona are the owner's standing law — read the merecat passage first.** The

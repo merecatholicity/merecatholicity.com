@@ -6,7 +6,7 @@ document carries the procedure, the inventory, the exceptions and the traps. Kee
 current in the same change that alters a workflow, a secret, or a make target it names.*
 
 Everything in this repository ships through GitHub Actions, and everything reaches `main`
-through a pull request. There are seven workflows, three secrets (one Cloudflare account token,
+through a pull request. There are eight workflows, three secrets (one Cloudflare account token,
 one fine-grained GitHub PAT, one deploy key), three variables, three environments (two of them
 gated) and one ruleset on `main`. Nothing else is needed, and — with the listed exceptions —
 nothing else is allowed. **The source of truth is git and the build of record is CI.** A thing done by
@@ -47,6 +47,7 @@ Then read what the merge started (`gh run list --limit 5`, or the PR's report) a
 | anything at all                               | **Build**                        | site built incrementally, gates, PDFs published, Pages deployed, edge purged |
 | anything a worker is built from, since its last deploy (`scripts/ci_scope.py`: the workers, `purescript/`, `package*.json`, the purs pin, the writings `content/` makes) | **Workers** (+ Build) | gates, dry-run; then D1 migrations applied and `wrangler deploy` |
 | `terraform/`, `terraform.yml`, `scripts/tf_plan_summary.py` | **Terraform** (+ Build) | plan → **waits for approval** → apply                               |
+| `press/` (Lérins Press)                        | **Press** (+ Build)              | tsc, build, dry-run; then `wrangler deploy` of `press/dist`, read back from the edge |
 | `book/`, `*.tex`, `resources/*.py`            | Build (with TeX Live)            | corpus/book PDFs rebuilt and published                              |
 | a chart page (`content/charting-communions.html`, `free-churches.html`, `objections.html`) or `styles/` | Build | the three chart PDFs reprinted and published |
 
@@ -94,7 +95,7 @@ Only Terraform ever waits for a human (or the operator): see §3.
 
 ---
 
-## 2. The seven workflows
+## 2. The eight workflows
 
 ### 2.1 `build.yml` — **Build** (every push and PR)
 
@@ -355,6 +356,29 @@ it at nowhere and the run must go red. Scheduled runs notify the last committer 
 workflow file. Never on a pull_request (Principle 3). No `uses:` at all.
 
 ---
+
+### 2.8 `press.yml` — **Press** (Lérins Press, since 2026-11-11)
+
+*Triggers:* `pull_request` and `push` to `main` touching `press/**` or the workflow;
+`workflow_dispatch`. The path filter is safe: Press is **not** a required check, so a pull
+request that never runs it waits for nothing. That also means auto-merge does not wait for it:
+read its result in the PR report before a press change merges. *Concurrency:* `press` for the
+deploy, never cancelled; a pull request's runs are `press-pr-<ref>`.
+
+The press is a static, single-page Lit catalogue with **its own npm project**
+(`press/package.json` + lock, its own Dependabot entry), apart from the main app, so neither
+Build nor Workers builds it. One job, in `press/`: `npm ci`, `tsc`, `make dry-run` (the build,
+then `wrangler deploy --dry-run`). On `main` it then deploys with `CLOUDFLARE_ROOT_TOKEN`:
+`wrangler deploy` uploads `dist/` as the static assets of the `lerins-press` worker (no code).
+Then it reads `https://press.merecatholicity.com/?probe=<run>` back and requires the bundle
+this build named. A 403 is Bot Fight Mode refusing the runner (a notice, verify from the dev
+box), and anything else non-200 is red.
+
+The worker sits on the zone **route** `press.merecatholicity.com/*` (wrangler's). The proxied
+AAAA `100::` record the route needs is Terraform's (`terraform/dns.tf`, `press`), so the host
+was declared before it was ever deployed. The zone's response-header rule (CSP, HSTS, COOP and
+the rest) reaches the press too, and everything it enforces is compatible with a static site.
+Assets under `/assets/` are content-hashed and served immutable (`press/static/_headers`).
 
 ## 3. The approval gate (Terraform)
 

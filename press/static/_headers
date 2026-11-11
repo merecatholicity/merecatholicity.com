@@ -1,0 +1,4 @@
+# Workers static assets read this file (it is not served). Everything under /assets/ is
+# named by a hash of its own bytes (scripts/build.ts), so a changed file is a new URL.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
