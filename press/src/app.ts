@@ -3,7 +3,7 @@
 import { render } from "lit";
 import { hydrate } from "@lit-labs/ssr-client";
 import type { Catalogue, Route } from "./types.ts";
-import { metaOf, page, routeOf } from "./views.ts";
+import { headTags, metaOf, page, routeOf } from "./views.ts";
 
 const dataEl = document.getElementById("press-data");
 const root = document.getElementById("app");
@@ -24,13 +24,26 @@ if (dataEl && root) {
   const head = (route: Route, hop: boolean) => {
     const meta = metaOf(route, cat);
     document.title = meta.title;
-    const url = new URL(meta.path, cat.press.url).href;
-    setMeta('meta[name="description"]', "content", meta.description);
-    setMeta('link[rel="canonical"]', "href", url);
-    setMeta('meta[property="og:title"]', "content", meta.title);
-    setMeta('meta[property="og:description"]', "content", meta.description);
-    setMeta('meta[property="og:url"]', "content", url);
-    setMeta('meta[property="og:image"]', "content", new URL(meta.image, cat.press.url).href);
+    setMeta('link[rel="canonical"]', "href", new URL(meta.path, cat.press.url).href);
+    // The tags the build wrote, rewritten for this page: one added where the page has a
+    // tag the last did not (book:author), one dropped where it has fewer. The JSON-LD stays
+    // as the server wrote it: crawlers read the served page, not a hop.
+    const tags = headTags(meta, cat);
+    const keep = new Set(tags.map(([a, k]) => `${a}=${k}`));
+    for (const el of document.head.querySelectorAll("meta[property], meta[name]")) {
+      const a = el.hasAttribute("property") ? "property" : "name";
+      const k = el.getAttribute(a) ?? "";
+      if ((k.includes(":") || k === "description") && !keep.has(`${a}=${k}`)) el.remove();
+    }
+    for (const [a, k, v] of tags) {
+      let el = document.head.querySelector(`meta[${a}="${k}"]`);
+      if (!el) {
+        el = document.createElement("meta");
+        el.setAttribute(a, k);
+        document.head.append(el);
+      }
+      el.setAttribute("content", v);
+    }
     if (hop) {
       window.scrollTo(0, 0);
       root.querySelector<HTMLElement>("h1")?.focus({ preventScroll: true });
