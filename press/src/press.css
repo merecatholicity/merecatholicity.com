@@ -1,6 +1,15 @@
 /* Lérins Press. The palette is merecatholicity.com's dark (charcoal) theme, its default
    look, copied from styles/main.css there: the press is a separate site, so it keeps its
    own copy rather than importing the main stylesheet. */
+/* Cinzel (SIL OFL 1.1, @fontsource/cinzel): the Trajan capitals of the logo's wordmark,
+   used for the press's name and nothing else. The build copies the files beside this. */
+@font-face {
+  font-family: "Cinzel";
+  font-weight: 500;
+  font-display: swap;
+  src: url("/assets/fonts/cinzel-latin-500-normal.woff2") format("woff2");
+}
+
 :root {
   color-scheme: dark;
   --bg: #0f1113;
@@ -23,6 +32,7 @@
   --kindle: #cba36a;
   --kindle-on: #2b1f0b;
   --font-serif: Georgia, 'Palatino Linotype', Palatino, 'URW Palladio L', serif;
+  --font-caps: "Cinzel", "Trajan Pro", Georgia, serif;
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --radius: 8px;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
@@ -61,18 +71,26 @@ p { overflow-wrap: break-word; }
 }
 .brand { display: flex; align-items: center; gap: 14px; color: var(--ink); text-decoration: none; min-width: 0; }
 .brand:hover { color: var(--ink); }
-.mark { width: 44px; height: 44px; flex: none; color: var(--gold); }
+.mark { width: auto; height: 52px; flex: none; }
 .brand-text { display: flex; flex-direction: column; min-width: 0; }
-.brand-name { font-size: 1.45rem; letter-spacing: 0.06em; font-variant: small-caps; line-height: 1.15; }
+.brand-name { font: 500 1.3rem/1.15 var(--font-caps); letter-spacing: 0.08em; color: var(--gold); }
 .brand-tag { font: 0.8rem/1.3 var(--font-sans); color: var(--faint); letter-spacing: 0.02em; }
 .nav { display: flex; flex-wrap: wrap; gap: 6px 20px; font: 0.95rem var(--font-sans); }
 .nav a { color: var(--muted); text-decoration: none; padding: 4px 0; border-bottom: 1px solid transparent; }
 .nav a:hover, .nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
 
-/* The motto, Vincent's rule. */
-.hero { text-align: center; padding: 56px 0 40px; }
-.motto-latin { margin: 0; font-size: clamp(1.25rem, 3.4vw, 1.9rem); font-style: italic; color: var(--gold); line-height: 1.35; }
-.motto-english { margin: 10px 0 0; font-size: clamp(1rem, 2.2vw, 1.2rem); color: var(--ink-soft); }
+/* The hero is the logo's lockup set live: shield, name, the ruled dot, Vincent's rule. */
+.hero { text-align: center; padding: 48px 0 44px; display: flex; flex-direction: column; align-items: center; }
+.hero-shield { width: auto; height: clamp(150px, 24vw, 210px); filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.55)); }
+.wordmark {
+  margin: 22px 0 0; font: 500 clamp(1.9rem, 6.2vw, 3rem)/1.1 var(--font-caps);
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold);
+}
+.ornament { display: flex; align-items: center; gap: 12px; width: min(300px, 70%); margin: 16px 0 18px; }
+.ornament::before, .ornament::after { content: ""; flex: 1; border-top: 1px solid var(--gold); opacity: 0.7; }
+.ornament span { width: 5px; height: 5px; border-radius: 50%; background: var(--gold); }
+.motto-latin { margin: 0; font-size: clamp(1.05rem, 2.6vw, 1.35rem); font-style: italic; color: var(--gold); line-height: 1.4; }
+.motto-english { margin: 8px 0 0; font-size: clamp(0.95rem, 2vw, 1.05rem); color: var(--ink-soft); }
 .motto-source { margin: 6px 0 0; font: 0.8rem var(--font-sans); color: var(--faint); letter-spacing: 0.04em; }
 
 .rule-head {
@@ -140,8 +158,8 @@ p { overflow-wrap: break-word; }
   width: 100%; border-top: 1px solid var(--rule); padding: 36px var(--page-pad) 48px;
   display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
 }
-.colophon .mark { width: 36px; height: 36px; }
-.colophon-name { margin: 4px 0 0; font-variant: small-caps; letter-spacing: 0.08em; color: var(--muted); }
+.colophon .mark { height: 64px; }
+.colophon-name { margin: 6px 0 0; font: 500 0.95rem var(--font-caps); letter-spacing: 0.1em; color: var(--gold); }
 .colophon-links { margin: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; font: 0.85rem var(--font-sans); }
 .colophon-links a { color: var(--faint); text-decoration: none; }
 .colophon-links a:hover { color: var(--ink); }
@@ -149,7 +167,7 @@ p { overflow-wrap: break-word; }
 @media (max-width: 720px) {
   .book { grid-template-columns: 1fr; gap: 28px; }
   .book-cover { position: static; max-width: 260px; margin: 0 auto; width: 70%; }
-  .hero { padding: 36px 0 28px; }
+  .hero { padding: 32px 0 28px; }
   /* A card's cover never outgrows the book page's own (260px at this width): a card stops
      at 230px and stands centred in its column, under the centred motto. */
   .shelf { justify-items: center; }
@@ -157,6 +175,7 @@ p { overflow-wrap: break-word; }
 @media (max-width: 480px) {
   body { font-size: 17px; }
   .masthead { padding-top: 14px; padding-bottom: 14px; }
+  .mark { height: 46px; }
   .shelf { gap: 32px 16px; }
   .card-buy .btn-small { flex: 1 1 auto; }
 }
