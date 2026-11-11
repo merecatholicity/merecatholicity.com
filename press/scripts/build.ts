@@ -13,7 +13,7 @@ import { build } from "esbuild";
 import { render } from "@lit-labs/ssr";
 import { collectResultSync } from "@lit-labs/ssr/lib/render-result.js";
 import type { Catalogue, Press, Route, Title } from "../src/types.ts";
-import { metaOf, page, pathOf } from "../src/views.ts";
+import { headTags, jsonLd, metaOf, page, pathOf } from "../src/views.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = join(ROOT, "dist");
@@ -75,16 +75,10 @@ function document(route: Route): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(meta.title)}</title>
-<meta name="description" content="${esc(meta.description)}">
 <link rel="canonical" href="${abs(meta.path)}">
 <meta name="theme-color" content="#0f1113">
-<meta property="og:site_name" content="${esc(press.name)}">
-<meta property="og:type" content="${route.kind === "title" ? "book" : "website"}">
-<meta property="og:title" content="${esc(meta.title)}">
-<meta property="og:description" content="${esc(meta.description)}">
-<meta property="og:url" content="${abs(meta.path)}">
-<meta property="og:image" content="${abs(meta.image)}">
-<meta name="twitter:card" content="summary_large_image">
+${headTags(meta, cat).map(([a, k, v]) => `<meta ${a}="${k}" content="${esc(v)}">`).join("\n")}
+<script type="application/ld+json">${JSON.stringify(jsonLd(route, cat)).replace(/</g, "\\u003c")}</script>
 <link rel="icon" href="/favicon.png" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preload" href="/${fontName}" as="font" type="font/woff2" crossorigin>

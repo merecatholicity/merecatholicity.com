@@ -26,32 +26,96 @@ export function routeOf(path: string, cat: Catalogue): Route {
   return title ? { kind: "title", title } : { kind: "missing" };
 }
 
+/** A link-preview image: site-relative, with its size and its words. */
+interface Image { src: string; width: number; height: number; alt: string }
+
 export interface Meta {
   title: string;
   description: string;
   path: string;
-  /** Site-relative image for link previews. */
-  image: string;
+  image: Image;
+  book?: Title;
 }
+
+/** The covers' .jpg (make covers) and the lockup preview (make brand). */
+const OG_IMAGE: Image = { src: "/brand/og.jpg", width: 1200, height: 630,
+  alt: "The Lérins Press shield, the name, and Vincent's rule" };
+const coverImage = (t: Title): Image => ({ src: `/covers/${t.cover}.jpg`, width: 800, height: 1199,
+  alt: `Cover of ${t.title}` });
 
 export function metaOf(route: Route, cat: Catalogue): Meta {
   const { press } = cat;
   switch (route.kind) {
     case "home":
       return { title: `${press.name} · ${press.tagline}`, description: press.about[0],
-        path: "/", image: "/brand/og.jpg" };
+        path: "/", image: OG_IMAGE };
     case "about":
       return { title: `About · ${press.name}`, description: press.about[0],
-        path: "/about/", image: "/brand/og.jpg" };
+        path: "/about/", image: OG_IMAGE };
     case "title": {
       const t = route.title;
       return { title: `${t.title} · ${press.name}`, description: t.lead.join(" "),
-        path: pathOf(route), image: `/covers/${t.cover}.jpg` };
+        path: pathOf(route), image: coverImage(t), book: t };
     }
     case "missing":
       return { title: `No such page · ${press.name}`, description: press.tagline,
-        path: "/404.html", image: "/brand/og.jpg" };
+        path: "/404.html", image: OG_IMAGE };
   }
+}
+
+/** Every <meta> the head carries for a page: the description, Open Graph and the X card,
+ *  the same set the main site writes (scripts/inject_social.py there). The build writes
+ *  them; the browser rewrites them on a hop. [attribute, key, content], URLs absolute. */
+export function headTags(meta: Meta, cat: Catalogue): [string, string, string][] {
+  const abs = (p: string) => new URL(p, cat.press.url + "/").href;
+  const tags: [string, string, string][] = [
+    ["name", "description", meta.description],
+    ["property", "og:site_name", cat.press.name],
+    ["property", "og:type", meta.book ? "book" : "website"],
+    ["property", "og:locale", "en_US"],
+    ["property", "og:title", meta.title],
+    ["property", "og:description", meta.description],
+    ["property", "og:url", abs(meta.path)],
+    ["property", "og:image", abs(meta.image.src)],
+    ["property", "og:image:width", String(meta.image.width)],
+    ["property", "og:image:height", String(meta.image.height)],
+    ["property", "og:image:alt", meta.image.alt],
+    ["name", "twitter:card", "summary_large_image"],
+    ["name", "twitter:title", meta.title],
+    ["name", "twitter:description", meta.description],
+    ["name", "twitter:image", abs(meta.image.src)],
+    ["name", "twitter:image:alt", meta.image.alt],
+  ];
+  if (meta.book) tags.push(["property", "book:author", meta.book.author]);
+  return tags;
+}
+
+/** schema.org for search engines: the press as an Organization on every page, and on a
+ *  title's page the Book, its paperback and Kindle editions, and where to buy them. */
+export function jsonLd(route: Route, cat: Catalogue): object {
+  const { press } = cat;
+  const abs = (p: string) => new URL(p, press.url + "/").href;
+  const org = {
+    "@type": "Organization", "@id": abs("/#press"), name: press.name, url: abs("/"),
+    logo: abs("/brand/shield-400.webp"), slogan: press.motto.latin,
+    parentOrganization: { "@type": "Organization", name: press.parent.name, url: press.parent.url },
+    sameAs: [press.parent.url, ...press.social.map(s => s.url)],
+  };
+  if (route.kind !== "title") return { "@context": "https://schema.org", ...org };
+  const t = route.title;
+  const edition = (bookFormat: string, url: string) =>
+    ({ "@type": "Book", bookFormat: `https://schema.org/${bookFormat}`, url, publisher: { "@id": org["@id"] } });
+  return {
+    "@context": "https://schema.org",
+    "@graph": [org, {
+      "@type": "Book", "@id": abs(pathOf(route)) + "#book", url: abs(pathOf(route)),
+      name: t.title, ...(t.subtitle ? { alternativeHeadline: t.subtitle } : {}),
+      author: { "@type": "Person", name: t.author }, publisher: { "@id": org["@id"] },
+      image: abs(`/covers/${t.cover}.jpg`), description: t.description.join(" "), inLanguage: "en",
+      workExample: [edition("Paperback", t.amazon), ...(t.kindle ? [edition("EBook", t.kindle)] : [])],
+      sameAs: [t.amazon, ...(t.kindle && t.kindle !== t.amazon ? [t.kindle] : []), ...(t.readFree ? [t.readFree] : [])],
+    }],
+  };
 }
 
 /** The press's mark: the shield from the owner's logo (content/brand, `make brand`). */
@@ -100,7 +164,32 @@ function home(cat: Catalogue): TemplateResult {
     </ul>`;
 }
 
-function titlePage(t: Title): TemplateResult {
+/** Copy a page's address; the button says it worked (or that it could not). */
+function copyLink(e: Event) {
+  const button = e.currentTarget as HTMLButtonElement;
+  const done = (word: string) => {
+    button.textContent = word;
+    setTimeout(() => { button.textContent = "Copy link"; }, 2000);
+  };
+  navigator.clipboard?.writeText(button.dataset.url ?? location.href)
+    .then(() => done("Copied"), () => done("Could not copy"));
+}
+
+/** Share a title: X, Facebook, email, or the bare address. Plain links, no scripts of theirs. */
+function share(t: Title, cat: Catalogue): TemplateResult {
+  const url = new URL(`/titles/${t.slug}/`, cat.press.url + "/").href;
+  const text = t.subtitle ? `${t.title}: ${t.subtitle}` : t.title;
+  const q = encodeURIComponent;
+  return html`<div class="share" role="group" aria-label="Share this book">
+    <span class="share-label">Share</span>
+    <a href="https://x.com/intent/post?text=${q(text)}&url=${q(url)}" rel="noopener" target="_blank">X</a>
+    <a href="https://www.facebook.com/sharer/sharer.php?u=${q(url)}" rel="noopener" target="_blank">Facebook</a>
+    <a href="mailto:?subject=${q(text)}&body=${q(`${t.lead[0]}\n\n${url}`)}">Email</a>
+    <button type="button" data-url=${url} @click=${copyLink}>Copy link</button>
+  </div>`;
+}
+
+function titlePage(t: Title, cat: Catalogue): TemplateResult {
   return html`
     <p class="back"><a href="/">All books</a></p>
     <article class="book">
@@ -115,6 +204,7 @@ function titlePage(t: Title): TemplateResult {
           ${buy(t)}
           ${t.readFree ? html`<a class="btn btn-outline" href=${t.readFree} rel="noopener">Read it free online</a>` : nothing}
         </p>
+        ${share(t, cat)}
         <div class="book-desc">${t.description.map(p => html`<p>${p}</p>`)}</div>
       </div>
     </article>`;
@@ -146,7 +236,7 @@ function missing(): TemplateResult {
 export function page(route: Route, cat: Catalogue): TemplateResult {
   const { press } = cat;
   const body = route.kind === "home" ? home(cat)
-    : route.kind === "title" ? titlePage(route.title)
+    : route.kind === "title" ? titlePage(route.title, cat)
     : route.kind === "about" ? about(cat)
     : missing();
   const here = (k: Route["kind"]) => route.kind === k ? "page" : undefined;
@@ -172,6 +262,7 @@ export function page(route: Route, cat: Catalogue): TemplateResult {
       <p class="colophon-name">${press.name}</p>
       <p class="colophon-links">
         <a href=${press.parent.url} rel="noopener">${press.parent.name}</a>
+        ${press.social.map(s => html`<a href=${s.url} rel="me noopener">${s.name}</a>`)}
         <a href="/rss.xml">RSS</a>
         <a href="/sitemap.xml">Sitemap</a>
       </p>

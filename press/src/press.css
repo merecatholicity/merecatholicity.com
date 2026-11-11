@@ -142,6 +142,13 @@ p { overflow-wrap: break-word; }
 .book-lead { margin-top: 24px; font-size: 1.15rem; color: var(--ink); }
 .book-lead p { margin: 0 0 12px; }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 24px 0 32px; }
+.share { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -12px 0 28px; font: 0.85rem var(--font-sans); }
+.share-label { color: var(--faint); margin-right: 4px; letter-spacing: 0.05em; text-transform: uppercase; font-size: 0.75rem; }
+.share a, .share button {
+  color: var(--ink-soft); background: none; border: 1px solid var(--rule); border-radius: 999px;
+  padding: 5px 12px; font: inherit; text-decoration: none; cursor: pointer;
+}
+.share a:hover, .share button:hover { color: var(--ink); border-color: var(--muted-c); }
 .book-desc { border-top: 1px solid var(--rule); padding-top: 24px; color: var(--muted); }
 .book-desc p { margin: 0 0 18px; }
 

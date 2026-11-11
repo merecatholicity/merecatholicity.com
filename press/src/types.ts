@@ -8,6 +8,8 @@ export interface Press {
   parent: { name: string; url: string };
   motto: { latin: string; english: string; source: string };
   about: string[];
+  /** The press's own accounts (none yet): the footer's links and the JSON-LD sameAs. */
+  social: { name: string; url: string }[];
 }
 
 export interface Title {
