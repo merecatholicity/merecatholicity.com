@@ -13,7 +13,7 @@ would fight forever: every `make worker-deploy` would produce a Terraform diff,
 and every `terraform apply` would produce a wrangler diff. So the line is drawn
 at the deploy:
 
-**Terraform owns** — the zone and three deliberate zone settings, all 18 DNS
+**Terraform owns** — the zone and three deliberate zone settings, all 20 DNS
 records, the custom rulesets (response headers, custom firewall, rate
 limiting, redirects, browser cache, and the configuration rule that keeps the edge from
 injecting a Web Analytics beacon), bot management, the seven R2 buckets and each one's public r2.dev
@@ -25,12 +25,13 @@ GitHub Pages configuration (`github_repository_pages`, adopted 2026-09-09 with
 a no-op plan), the three GitHub environments (`github-pages`, the
 `terraform-production` approval gate with its main-only branch policy, and —
 created here on 2026-09-17 — the `librarian-config` gate for merecat's persona
-and dials) and the two public-id Actions variables. Fifty-seven resources in all.
+and dials) and the two public-id Actions variables. Fifty-eight resources in all.
 
 **wrangler owns** — worker scripts and versions, all bindings, vars, secrets,
 `routes`, `triggers.crons`, and D1 migrations. None of that appears here. The
-source of truth for it stays `comments-worker/wrangler.jsonc` and
-`contact-worker/wrangler.jsonc`.
+source of truth for it stays `comments-worker/wrangler.jsonc`,
+`contact-worker/wrangler.jsonc` and `press/wrangler.jsonc` (Lérins Press: its route
+needs the proxied `press` record, which is Terraform's).
 
 **ingest.py owns** — the contents of the three librarian D1 rooms and the
 Vectorize index. All derived data, rebuilt by `make librarian`.
