@@ -36,14 +36,13 @@ export interface Meta {
 
 export function metaOf(route: Route, cat: Catalogue): Meta {
   const { press } = cat;
-  const first = cat.titles[0];
   switch (route.kind) {
     case "home":
       return { title: `${press.name} · ${press.tagline}`, description: press.about[0],
-        path: "/", image: first ? `/covers/${first.cover}.jpg` : "/favicon.svg" };
+        path: "/", image: "/brand/og.jpg" };
     case "about":
       return { title: `About · ${press.name}`, description: press.about[0],
-        path: "/about/", image: first ? `/covers/${first.cover}.jpg` : "/favicon.svg" };
+        path: "/about/", image: "/brand/og.jpg" };
     case "title": {
       const t = route.title;
       return { title: `${t.title} · ${press.name}`, description: t.lead.join(" "),
@@ -51,18 +50,15 @@ export function metaOf(route: Route, cat: Catalogue): Meta {
     }
     case "missing":
       return { title: `No such page · ${press.name}`, description: press.tagline,
-        path: "/404.html", image: "/favicon.svg" };
+        path: "/404.html", image: "/brand/og.jpg" };
   }
 }
 
-/** The press's mark. A placeholder until the owner's logo arrives (_series/art/logo). */
-const mark = html`<svg class="mark" viewBox="0 0 48 48" aria-hidden="true">
-  <circle cx="24" cy="24" r="22.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
-  <path d="M14 33h20M17 33V20l7-6 7 6v13M21.5 33v-6.5a2.5 2.5 0 0 1 5 0V33" fill="none"
-    stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-  <path d="M10 37.5c3 0 3-1.5 6-1.5s3 1.5 6 1.5 3-1.5 6-1.5 3 1.5 6 1.5 3-1.5 4-1.5" fill="none"
-    stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-</svg>`;
+/** The press's mark: the shield from the owner's logo (content/brand, `make brand`). */
+const SHIELD_W = 288;
+const SHIELD_H = 469;
+const mark = (cls: string, size: 144 | 400 = 144) => html`<img class=${cls}
+  src="/brand/shield-${size}.webp" width=${SHIELD_W} height=${SHIELD_H} alt="">`;
 
 const cover = (t: Title, sizes: string, eager = false) => html`<picture class="cover">
   <source type="image/avif" srcset="/covers/${t.cover}.avif">
@@ -83,11 +79,14 @@ function home(cat: Catalogue): TemplateResult {
   const { press, titles } = cat;
   return html`
     <section class="hero">
+      ${mark("hero-shield", 400)}
+      <h1 class="wordmark" tabindex="-1">${press.name}</h1>
+      <p class="ornament" aria-hidden="true"><span></span></p>
       <p class="motto-latin" lang="la">${press.motto.latin}</p>
       <p class="motto-english">${press.motto.english}</p>
       <p class="motto-source">${press.motto.source}</p>
     </section>
-    <h1 class="rule-head" tabindex="-1"><span>Books</span></h1>
+    <h2 class="rule-head"><span>Books</span></h2>
     <ul class="shelf">
       ${titles.map((t, i) => html`<li class="card">
         <a class="card-link" href="/titles/${t.slug}/">
@@ -155,7 +154,7 @@ export function page(route: Route, cat: Catalogue): TemplateResult {
     <a class="skip" href="#main">Skip to content</a>
     <header class="masthead">
       <a class="brand" href="/" aria-label="${press.name}, home">
-        ${mark}
+        ${mark("mark")}
         <span class="brand-text">
           <span class="brand-name">${press.name}</span>
           <span class="brand-tag">${press.tagline}</span>
@@ -169,7 +168,7 @@ export function page(route: Route, cat: Catalogue): TemplateResult {
     </header>
     <main id="main">${body}</main>
     <footer class="colophon">
-      ${mark}
+      ${mark("mark")}
       <p class="colophon-name">${press.name}</p>
       <p class="colophon-links">
         <a href=${press.parent.url} rel="noopener">${press.parent.name}</a>

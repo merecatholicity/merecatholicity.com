@@ -52,6 +52,11 @@ const css = read("src/press.css");
 const cssName = `assets/press-${hash(css)}.css`;
 writeFileSync(join(DIST, cssName), css);
 
+const FONTS = join(ROOT, "node_modules/@fontsource/cinzel");
+mkdirSync(join(DIST, "assets/fonts"));
+cpSync(join(FONTS, "files/cinzel-latin-500-normal.woff2"), join(DIST, "assets/fonts/cinzel-latin-500-normal.woff2"));
+cpSync(join(FONTS, "LICENSE"), join(DIST, "assets/fonts/OFL.txt"));
+
 cpSync(join(ROOT, "content/covers"), join(DIST, "covers"), { recursive: true });
 cpSync(join(ROOT, "static"), DIST, { recursive: true });
 
@@ -77,7 +82,9 @@ function document(route: Route): string {
 <meta property="og:url" content="${abs(meta.path)}">
 <meta property="og:image" content="${abs(meta.image)}">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preload" href="/assets/fonts/cinzel-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="alternate" type="application/rss+xml" title="${esc(press.name)}" href="/rss.xml">
 <link rel="stylesheet" href="/${cssName}">
 <script type="module" src="/${jsName}"></script>
