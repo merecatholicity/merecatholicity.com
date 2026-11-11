@@ -9,6 +9,7 @@
     "tsc": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@lit-labs/ssr-client": "1.1.8",
     "lit": "3.3.3"
   },
   "devDependencies": {
