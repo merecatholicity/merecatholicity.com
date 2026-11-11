@@ -70,9 +70,14 @@ const cover = (t: Title, sizes: string, eager = false) => html`<picture class="c
     alt="Cover of ${t.title}" loading=${eager ? "eager" : "lazy"} decoding="async">
 </picture>`;
 
-const amazon = (t: Title, short = false) => html`<a class=${short ? "btn btn-small" : "btn"}
-  href=${t.amazon} rel="noopener" target="_blank"><span>${short ? "Buy" : "Buy the paperback"}<span
-  class="sr"> ${t.title}</span> on Amazon</span></a>`;
+/** The buy buttons: green for the paperback, gold for the Kindle edition. */
+const buy = (t: Title, short = false) => html`
+  <a class=${short ? "btn btn-paper btn-small" : "btn btn-paper"} href=${t.amazon} rel="noopener"
+    target="_blank"><span>${short ? "Paperback" : "Paperback on Amazon"}<span
+    class="sr"> of ${t.title}${short ? " on Amazon" : ""}</span></span></a>
+  ${t.kindle ? html`<a class=${short ? "btn btn-kindle btn-small" : "btn btn-kindle"} href=${t.kindle}
+    rel="noopener" target="_blank"><span>${short ? "Kindle" : "Kindle on Amazon"}<span
+    class="sr"> edition of ${t.title}${short ? " on Amazon" : ""}</span></span></a>` : nothing}`;
 
 function home(cat: Catalogue): TemplateResult {
   const { press, titles } = cat;
@@ -91,7 +96,7 @@ function home(cat: Catalogue): TemplateResult {
           ${t.subtitle ? html`<span class="card-sub">${t.subtitle}</span>` : nothing}
           <span class="card-author">${t.author}</span>
         </a>
-        ${amazon(t, true)}
+        <p class="card-buy">${buy(t, true)}</p>
       </li>`)}
     </ul>`;
 }
@@ -104,11 +109,11 @@ function titlePage(t: Title): TemplateResult {
       <div class="book-text">
         <h1 tabindex="-1">${t.title}</h1>
         ${t.subtitle ? html`<p class="book-sub">${t.subtitle}</p>` : nothing}
-        <p class="book-by">${t.author} · ${t.format}</p>
+        <p class="book-by">${t.author} · ${t.kindle ? `${t.format} and Kindle` : t.format}</p>
         ${t.description[0]?.startsWith(t.lead[0]) ? nothing
           : html`<div class="book-lead">${t.lead.map(p => html`<p>${p}</p>`)}</div>`}
         <p class="actions">
-          ${amazon(t)}
+          ${buy(t)}
           ${t.readFree ? html`<a class="btn btn-outline" href=${t.readFree} rel="noopener">Read it free online</a>` : nothing}
         </p>
         <div class="book-desc">${t.description.map(p => html`<p>${p}</p>`)}</div>

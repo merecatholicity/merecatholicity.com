@@ -18,7 +18,10 @@ export interface Title {
   format: string;
   /** ISO date the title joined the catalogue: the RSS item's date and the sitemap's lastmod. */
   listed: string;
+  /** The paperback's Amazon page. */
   amazon: string;
+  /** The Kindle edition's Amazon page, where there is one. */
+  kindle?: string;
   /** A free reading copy, where one exists (the site keeps many). */
   readFree?: string;
   /** Basename under covers/: an .avif for the page and a .jpg for feeds and link previews. */
