@@ -1,7 +1,8 @@
 # merecatholicity.com
 
 A static site (`docs/`, served by GitHub Pages behind Cloudflare) plus two Cloudflare
-Workers. `main` is production and takes no direct push: every change is a pull request whose
+Workers, and Lérins Press, the publishing arm's own static catalogue (`press/`, its own npm
+project, served at press.merecatholicity.com by a static-assets Worker). `main` is production and takes no direct push: every change is a pull request whose
 checks must pass, and **the merge IS the deploy** (`scripts/ship.sh` is the road).
 
 [![merecatholicity.com architecture overview: developer, source, build, CI/CD, Cloudflare edge, workers, data](docs/architecture/architecture.png)](docs/architecture/architecture.png)
@@ -80,6 +81,7 @@ secrets set with `wrangler secret put`. Credentials live in
 | `make comments-backup` | Fetch the latest daily D1 backup from R2 and replay it locally |
 | `make librarian` | The hand road: push merecat's changed works, persona and dials |
 | `make nightly-run` / `make nightly-baseline` | The nightly headless run against production (main's kit, rebuilt in `local/nightly-kit` each run), and its baseline (this checkout's) |
+| `make press-run` / `make press-build` / `make press-check` | Lérins Press (`press/`, its own Makefile): serve on 127.0.0.1:8090 rebuilding on a save / build `press/dist` / tsc. CI deploys it on merge (`press.yml`) |
 | `make clean` | Sweep LaTeX detritus and `__pycache__` |
 
 ## Cookbook
@@ -123,6 +125,7 @@ gh run list --limit 6                                    # what the last merges 
 scripts/ci_approve.sh                                    # anything waiting on the Terraform gate?
 scripts/ci_approve.sh <run-id> --approve "reviewed: …"   # approve it (or --reject)
 gh workflow run workers.yml --ref main                   # redeploy both workers from CI
+gh workflow run press.yml --ref main                     # redeploy Lérins Press from CI
 terraform -chdir=terraform plan                          # drift check; expect: No changes.
 python3 scripts/publish_pdfs.py --check                  # bucket vs manifest vs local PDFs
 curl -s "https://merecatholicity.com/version.json?probe=$RANDOM"   # what is actually live

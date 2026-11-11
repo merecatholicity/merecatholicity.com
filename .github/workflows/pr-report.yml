@@ -26,7 +26,7 @@ name: PR report
 
 on:
   workflow_run:
-    workflows: [Build, Workers, Terraform, merecat]
+    workflows: [Build, Workers, Press, Terraform, merecat]
     types: [requested, completed]
   workflow_dispatch:
     inputs:

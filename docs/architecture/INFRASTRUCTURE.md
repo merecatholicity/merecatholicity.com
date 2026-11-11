@@ -93,6 +93,7 @@ on page one.)
 - **Home is painted by its HTML, and nothing of the app races the first frame: mobile PageSpeed 96 → 100 (2026-10-09)** — `log/2026-10.md`
 - **A volume no longer split takes its old parts with it (2026-10-09)** — `log/2026-10.md`
 - **The desktop's first paint is the app too: desktop PageSpeed 91 (CLS 0.200) (2026-10-10)** — `log/2026-10.md`
+- **Lérins Press is a static-assets Worker on a declared host, shipped by its own workflow (2026-11-11)** — `log/2026-11.md`
 
 ### Build system
 

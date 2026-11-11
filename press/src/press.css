@@ -1,0 +1,185 @@
+/* Lérins Press. The palette is merecatholicity.com's dark (charcoal) theme, its default
+   look, copied from styles/main.css there: the press is a separate site, so it keeps its
+   own copy rather than importing the main stylesheet. */
+/* Cinzel (SIL OFL 1.1, @fontsource/cinzel): the Trajan capitals of the logo's wordmark,
+   used for the press's name and nothing else. The build puts the file under its hash and
+   rewrites this URL to it. */
+@font-face {
+  font-family: "Cinzel";
+  font-weight: 500;
+  font-display: swap;
+  src: url("/assets/fonts/cinzel-latin-500-normal.woff2") format("woff2");
+}
+
+:root {
+  color-scheme: dark;
+  --bg: #0f1113;
+  --surface: #191c20;
+  --cream: #20242a;
+  --cream-2: #262b32;
+  --ink: #e6e8ea;
+  --ink-soft: #d3d6d9;
+  --muted: #c6cace;
+  --muted-c: #a1a7ae;
+  --faint: #9aa1a9;
+  --rule: #30353b;
+  --accent: #ef6b6b;
+  --accent-2: #f2827c;
+  --gold: #cba36a;
+  /* The buy buttons take the site's dark-theme green (its --grade-y) and gold (its
+     --brown), never the red accent: red reads as danger on a button. */
+  --buy: #6cc47a;
+  --buy-on: #0e2414;
+  --kindle: #cba36a;
+  --kindle-on: #2b1f0b;
+  --font-serif: Georgia, 'Palatino Linotype', Palatino, 'URW Palladio L', serif;
+  --font-caps: "Cinzel", "Trajan Pro", Georgia, serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --radius: 8px;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --page-pad: clamp(16px, 4vw, 32px);
+  --measure: 1080px;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 18px/1.65 var(--font-serif);
+  overflow-x: clip;
+}
+#app { min-height: 100vh; display: flex; flex-direction: column; }
+main { flex: 1; width: 100%; max-width: var(--measure); margin: 0 auto; padding: 0 var(--page-pad) 64px; }
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { color: var(--accent-2); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+h1:focus { outline: none; }
+img { max-width: 100%; height: auto; display: block; }
+p { overflow-wrap: break-word; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.skip { position: absolute; left: -999px; top: 8px; background: var(--surface); padding: 8px 12px; z-index: 2; }
+.skip:focus { left: 8px; }
+
+/* The masthead: the mark, the name, the tagline, three doors. */
+.masthead {
+  width: 100%; max-width: var(--measure); margin: 0 auto;
+  padding: 20px var(--page-pad);
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px;
+  border-bottom: 1px solid var(--rule);
+}
+.brand { display: flex; align-items: center; gap: 14px; color: var(--ink); text-decoration: none; min-width: 0; }
+.brand:hover { color: var(--ink); }
+.mark { width: auto; height: 52px; flex: none; }
+.brand-text { display: flex; flex-direction: column; min-width: 0; }
+.brand-name { font: 500 1.3rem/1.15 var(--font-caps); letter-spacing: 0.08em; color: var(--gold); }
+.brand-tag { font: 0.8rem/1.3 var(--font-sans); color: var(--faint); letter-spacing: 0.02em; }
+.nav { display: flex; flex-wrap: wrap; gap: 6px 20px; font: 0.95rem var(--font-sans); }
+.nav a { color: var(--muted); text-decoration: none; padding: 4px 0; border-bottom: 1px solid transparent; }
+.nav a:hover, .nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+
+/* The hero is the logo's lockup set live: shield, name, the ruled dot, Vincent's rule. */
+.hero { text-align: center; padding: 48px 0 44px; display: flex; flex-direction: column; align-items: center; }
+.hero-shield { width: auto; height: clamp(150px, 24vw, 210px); filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.55)); }
+.wordmark {
+  margin: 22px 0 0; font: 500 clamp(1.9rem, 6.2vw, 3rem)/1.1 var(--font-caps);
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold);
+}
+.ornament { display: flex; align-items: center; gap: 12px; width: min(300px, 70%); margin: 16px 0 18px; }
+.ornament::before, .ornament::after { content: ""; flex: 1; border-top: 1px solid var(--gold); opacity: 0.7; }
+.ornament span { width: 5px; height: 5px; border-radius: 50%; background: var(--gold); }
+.motto-latin { margin: 0; font-size: clamp(1.05rem, 2.6vw, 1.35rem); font-style: italic; color: var(--gold); line-height: 1.4; }
+.motto-english { margin: 8px 0 0; font-size: clamp(0.95rem, 2vw, 1.05rem); color: var(--ink-soft); }
+.motto-source { margin: 6px 0 0; font: 0.8rem var(--font-sans); color: var(--faint); letter-spacing: 0.04em; }
+
+.rule-head {
+  display: flex; align-items: center; gap: 16px; margin: 8px 0 32px;
+  font-weight: normal; font-size: 1.1rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted-c);
+}
+.rule-head::before, .rule-head::after { content: ""; flex: 1; border-top: 1px solid var(--rule); }
+
+/* The shelf: covers first, as on a bookshop table. */
+.shelf {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(200px, 42vw), 1fr)); gap: 40px 28px;
+}
+.card { display: flex; flex-direction: column; gap: 12px; min-width: 0; width: 100%; max-width: 230px; }
+.card-link { display: flex; flex-direction: column; gap: 4px; color: var(--ink); text-decoration: none; }
+.card-link:hover { color: var(--ink); }
+.cover img { border-radius: 3px; box-shadow: var(--shadow-2); background: var(--cream); aspect-ratio: 1000 / 1499; transition: transform 0.15s ease; }
+.card-link .cover { margin-bottom: 10px; }
+.card-link:hover .cover img { transform: translateY(-3px); }
+.card-title { font-size: 1.12rem; line-height: 1.3; }
+.card-sub { font-size: 0.9rem; line-height: 1.4; color: var(--muted-c); }
+.card-author { font: 0.8rem var(--font-sans); color: var(--faint); letter-spacing: 0.05em; text-transform: uppercase; margin-top: 2px; }
+
+/* Buttons: the paperback green, the Kindle gold, and a quiet outline. */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; text-align: center;
+  padding: 10px 18px; border-radius: 999px; border: 1px solid transparent;
+  font: 600 0.95rem/1.2 var(--font-sans); text-decoration: none;
+}
+.btn:hover { filter: brightness(1.08); }
+.btn-paper, .btn-paper:hover { background: var(--buy); border-color: var(--buy); color: var(--buy-on); }
+.btn-kindle, .btn-kindle:hover { background: var(--kindle); border-color: var(--kindle); color: var(--kindle-on); }
+.btn-small { padding: 7px 14px; font-size: 0.85rem; }
+.btn-outline { background: transparent; color: var(--ink-soft); border-color: var(--rule); }
+.btn-outline:hover { color: var(--ink); border-color: var(--muted-c); filter: none; }
+.card-buy { margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* A title's page. */
+.back { margin: 28px 0 8px; font: 0.9rem var(--font-sans); }
+.back a { color: var(--muted); text-decoration: none; }
+.back a::before { content: "← "; }
+.back a:hover { color: var(--ink); }
+.book { display: grid; grid-template-columns: minmax(200px, 340px) 1fr; gap: 48px; margin-top: 20px; align-items: start; }
+.book-cover { position: sticky; top: 24px; }
+.book h1 { margin: 0; font-weight: normal; font-size: clamp(1.9rem, 4.5vw, 2.7rem); line-height: 1.15; }
+.book-sub { margin: 10px 0 0; font-size: 1.2rem; line-height: 1.4; color: var(--ink-soft); font-style: italic; }
+.book-by { margin: 14px 0 0; font: 0.85rem var(--font-sans); color: var(--faint); letter-spacing: 0.05em; text-transform: uppercase; }
+.book-lead { margin-top: 24px; font-size: 1.15rem; color: var(--ink); }
+.book-lead p { margin: 0 0 12px; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 24px 0 32px; }
+.book-desc { border-top: 1px solid var(--rule); padding-top: 24px; color: var(--muted); }
+.book-desc p { margin: 0 0 18px; }
+
+/* Plain pages. */
+.prose { max-width: 680px; margin: 48px auto 0; }
+.prose h1 { font-weight: normal; font-size: clamp(1.8rem, 4vw, 2.4rem); margin: 0 0 24px; }
+.prose p { color: var(--ink-soft); }
+.motto-block { margin: 36px 0; padding: 20px 24px; border-left: 2px solid var(--gold); background: var(--surface); border-radius: 0 var(--radius) var(--radius) 0; }
+.motto-block p { margin: 0; color: var(--ink); }
+.motto-block p[lang="la"] { font-style: italic; color: var(--gold); }
+.motto-block footer { margin-top: 8px; font: 0.8rem var(--font-sans); color: var(--faint); }
+
+/* The colophon: every page ends on the mark, like the last leaf of a book. */
+.colophon {
+  width: 100%; border-top: 1px solid var(--rule); padding: 36px var(--page-pad) 48px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
+}
+.colophon .mark { height: 64px; }
+.colophon-name { margin: 6px 0 0; font: 500 0.95rem var(--font-caps); letter-spacing: 0.1em; color: var(--gold); }
+.colophon-links { margin: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; font: 0.85rem var(--font-sans); }
+.colophon-links a { color: var(--faint); text-decoration: none; }
+.colophon-links a:hover { color: var(--ink); }
+
+@media (max-width: 720px) {
+  .book { grid-template-columns: 1fr; gap: 28px; }
+  .book-cover { position: static; max-width: 260px; margin: 0 auto; width: 70%; }
+  .hero { padding: 32px 0 28px; }
+  /* A card's cover never outgrows the book page's own (260px at this width): a card stops
+     at 230px and stands centred in its column, under the centred motto. */
+  .shelf { justify-items: center; }
+}
+@media (max-width: 480px) {
+  body { font-size: 17px; }
+  .masthead { padding-top: 14px; padding-bottom: 14px; }
+  .mark { height: 46px; }
+  .shelf { gap: 32px 16px; }
+  .card-buy .btn-small { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cover img { transition: none; }
+}

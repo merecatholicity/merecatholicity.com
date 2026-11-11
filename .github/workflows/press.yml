@@ -1,0 +1,91 @@
+# Lérins Press: the static catalogue under press/, served at press.merecatholicity.com
+# by the `lerins-press` worker (static assets only, no code). Since 2026-11-11.
+#
+# The press is its own npm project (press/package.json + lock), apart from the main
+# app, so nothing in build.yml or workers.yml builds or ships it. This does:
+#
+#   * a pull request that touches press/ runs `make -C press check` (tsc) and
+#     `make -C press dry-run` (build + wrangler's own check), with NO credentials;
+#   * a merge to main that touches press/ builds dist/ and deploys it with the one
+#     account token, then reads the page back from the edge. CI's bytes are what is
+#     served, never a dev box's (CLAUDE.md, rule 3).
+#
+# A path filter is safe here: Press is not a required check (the `main` ruleset requires
+# build, check and plan), so a pull request that never runs it waits for nothing. The DNS
+# record the worker's route needs is Terraform's (terraform/dns.tf, `press`).
+#
+# Secret: CLOUDFLARE_ROOT_TOKEN (the one Cloudflare credential, CICD.md §4).
+
+name: Press
+
+on:
+  pull_request:
+    paths: ['press/**', '.github/workflows/press.yml']
+  push:
+    branches: [main]
+    paths: ['press/**', '.github/workflows/press.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A deploy in flight is never cancelled; a pull request's runs are their own group.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('press-pr-{0}', github.ref) || 'press' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  press:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: press
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Node 24 runs the build's .ts directly, as Node 26 does on the dev box
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: press/package-lock.json
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Type-check
+        run: npx tsc -p tsconfig.json
+
+      - name: Build, and check the deploy without credentials
+        run: make dry-run
+
+      - name: Deploy
+        if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+        env:
+          # Blank on a pull request: PR-authored code never sees a credential, and this
+          # step does not run on one anyway.
+          CLOUDFLARE_API_TOKEN: ${{ github.event_name != 'pull_request' && secrets.CLOUDFLARE_ROOT_TOKEN || '' }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || '6093bc0889c95a08f0a92a8df6750c66' }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::CLOUDFLARE_ROOT_TOKEN not set: nothing was deployed"
+            exit 1
+          fi
+          npx wrangler deploy
+
+      - name: Read it back
+        if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+        run: |
+          # Bot Fight Mode may 403 a runner: that is the edge refusing a datacenter, not a
+          # verdict on the deploy (CLAUDE.md). Anything else must be the page, with the bundle
+          # this build named.
+          want=$(grep -o 'assets/app-[0-9a-f]*\.js' dist/index.html | head -1)
+          code=$(curl -s -o /tmp/press.html -w '%{http_code}' -A 'Mozilla/5.0' "https://press.merecatholicity.com/?probe=$GITHUB_RUN_ID")
+          echo "press.merecatholicity.com answered $code"
+          case "$code" in
+            200) grep -q "$want" /tmp/press.html || { echo "::error::the edge serves another build than $want"; exit 1; } ;;
+            403) echo "::notice::the edge 403'd the runner (Bot Fight Mode); verify from the dev box" ;;
+            *) echo "::error::press.merecatholicity.com answered $code"; exit 1 ;;
+          esac

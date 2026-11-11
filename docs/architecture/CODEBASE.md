@@ -44,6 +44,15 @@ idea holds the whole thing together and is the key to reading it:
                               rules via window.mcCore)
 ```
 
+**`press/` (2026-11-11)** is Lérins Press, the publishing arm's catalogue at
+press.merecatholicity.com. It is a separate static site, kept apart from the app on purpose: its
+own npm project and lockfile, its own `tsconfig.json` (the root one never reads it), its own
+Makefile (`run`, `build`, `check`, `covers`, `brand`, `deploy`, `dry-run`). `src/views.ts` is
+every page as lit-html templates. `scripts/build.ts` renders them to HTML with `@lit-labs/ssr`,
+one prerendered page per route, plus the sitemap, RSS and 404. `src/app.ts` hydrates that page in
+place and then navigates without reloads. The catalogue is data: `content/titles.json` and
+`content/press.json`, embedded in every page. Shipped by `.github/workflows/press.yml`.
+
 **`pagejs/` (2026-09-18)** is the third source tree beside `app/` and `client/`:
 the seven scripts a page loads directly rather than through a bundle — `nav.ts`
 (the shell injector and SW update pump), `deeplink.ts`, `bible-reader.ts`,

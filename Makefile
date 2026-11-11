@@ -91,6 +91,16 @@ worker-deploy: jscheck psbuild
 # `gh workflow run workers.yml -f mode=stage -f percent=10`, the build of
 # record; this is the emergency hand road); `worker-promote` sends 100% to the
 # newest Version; `worker-status` shows the split.
+# Lérins Press (press/): its own static site and npm project, apart from the main app.
+# These delegate to press/Makefile. Its deploy is CI's (.github/workflows/press.yml).
+.PHONY: press-run press-build press-check
+press-run:
+	$(MAKE) -C press run
+press-build:
+	$(MAKE) -C press build
+press-check:
+	$(MAKE) -C press check
+
 .PHONY: worker-rollback worker-stage worker-promote worker-status
 worker-rollback:
 	scripts/worker_rollback.sh $(VERSION)

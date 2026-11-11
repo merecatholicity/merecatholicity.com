@@ -26,3 +26,13 @@ updates:
       toolchain:
         dependency-type: development
         update-types: ["minor", "patch"]
+  # Lérins Press (2026-11-11) is its own npm project under press/, with its own lockfile,
+  # so it is its own entry. Its PRs run press.yml's check and dry-run without secrets.
+  - package-ecosystem: npm
+    directory: /press
+    schedule:
+      interval: weekly
+    groups:
+      toolchain:
+        dependency-type: development
+        update-types: ["minor", "patch"]

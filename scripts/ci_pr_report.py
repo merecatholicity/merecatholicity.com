@@ -52,7 +52,7 @@ import zipfile
 
 MARKER = '<!-- mc-pipeline-report -->'
 SELF = 'PR report'              # this workflow's own name: never reported on
-ORDER = ['Build', 'Workers', 'Terraform', 'merecat']
+ORDER = ['Build', 'Workers', 'Press', 'Terraform', 'merecat']
 PLAN_ARTIFACT = 'tf-plan-summary'
 MAX_FAILED = 3                  # failed jobs whose log tail is shown
 TAIL_LINES = 40
