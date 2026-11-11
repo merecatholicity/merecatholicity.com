@@ -1,0 +1,20 @@
+{
+  "name": "lerins-press",
+  "private": true,
+  "description": "Lérins Press, the publishing arm of merecatholicity.com: a static, single-page Lit catalogue.",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.ts",
+    "serve": "node scripts/serve.ts",
+    "tsc": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "lit": "3.3.3"
+  },
+  "devDependencies": {
+    "@lit-labs/ssr": "4.1.0",
+    "@types/node": "24.19.2",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
+  }
+}
