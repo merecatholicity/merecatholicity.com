@@ -162,6 +162,7 @@ on page one.)
 - **Every dark theme's small print failed AA, and the surface to measure against is the card, not the page (2026-09-18).** — `log/2026-09.md`
 - **Four view modules leave the shell, and the budget that should have noticed learns to add (2026-09-18).** — `log/2026-09.md`
 - **A thread showed twice for an admin: a lazy view mounted once for every route that called it, and every admin's boot routed twice (2026-11-04)** — `log/2026-11.md`
+- **The journal's overview is teasers, the entry's page the whole (2026-11-11)** — `log/2026-11.md`
 
 ### Testing policy
 

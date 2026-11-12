@@ -519,6 +519,8 @@ trace('submit: board post');
     wrap.appendChild(copy);
     return wrap;
   }
+  /* About three or four lines of the journal's measure (Domain.Comments.journalTeaser). */
+  var JOURNAL_TEASER = 420;
   function journalEntry(a: any, full: any) {
     var art = el('article', full ? 'journal-entry journal-full' : 'journal-entry');
     art.appendChild(journalDateLine(a));
@@ -528,9 +530,24 @@ trace('submit: board post');
     else { var link = el('a', null, titleText); link.href = 'journal.html?a=' + a.id; h.appendChild(link); }
     art.appendChild(h);
     var bodyEl = el('div', 'journal-body prose');
-    fillBody(bodyEl, a.body);
     art.appendChild(bodyEl);
-    art.appendChild(journalShare(a.id));
+    /* The overview is teasers, the entry's page the whole (the owner, 2026-11-11):
+       there a reader is offered the rest, and the permalink and Copy link stay on
+       the entry's own page. */
+    if (full) {
+      fillBody(bodyEl, a.body);
+      art.appendChild(journalShare(a.id));
+      return art;
+    }
+    var teaser = window.mcCore!.journalTeaser(JOURNAL_TEASER, a.body);
+    fillBody(bodyEl, teaser.text);
+    if (teaser.more) {
+      var more = el('div', 'journal-share');
+      var go = el('a', 'journal-permalink', 'Continue reading ›') as HTMLAnchorElement;
+      go.href = 'journal.html?a=' + a.id;
+      more.appendChild(go);
+      art.appendChild(more);
+    }
     return art;
   }
   function viewJournal() {
