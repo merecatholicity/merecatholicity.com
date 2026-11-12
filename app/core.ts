@@ -92,6 +92,10 @@ export const handleMax: number = Handle.maxLen;
    single-sourced with the worker (Domain.Links). Already a plain record. */
 export const linkNormalize = (platform: string, raw: string) => Links.normalize(String(platform == null ? '' : platform))(String(raw == null ? '' : raw));
 export const linkPlatforms: ReadonlyArray<string> = Links.platforms;
+/* Is a post's link ours (Domain.Links)? isOwnHost: the apex and every subdomain, so
+   no off-site warning. isOwnSite: the apex or www, the pages this app serves. */
+export const isOwnHost = (url: string): boolean => Links.isOwnHost(String(url == null ? '' : url));
+export const isOwnSite = (url: string): boolean => Links.isOwnSite(String(url == null ? '' : url));
 
 /* faithLabel(code) -> the display label, or '' for an unrecognized code (the
    client checks truthiness). faiths -> the ordered [{code,label}] the signup

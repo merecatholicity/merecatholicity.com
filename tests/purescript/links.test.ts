@@ -44,3 +44,22 @@ test('handles reject illegal characters and over-length', () => {
   assert.equal(norm('x', 'bad/slash').ok, false);
   assert.equal(norm('x', 'x'.repeat(201)).error, 'too_long');
 });
+
+test('our own hosts: the apex, www and every subdomain, and nothing that only looks like one', () => {
+  for (const u of ['https://merecatholicity.com', 'https://merecatholicity.com/journal.html?a=1',
+                   'http://www.merecatholicity.com/#x', 'https://press.merecatholicity.com/',
+                   'https://files.merecatholicity.com/book.pdf', 'HTTPS://Press.MereCatholicity.com/titles/x/']) {
+    assert.equal(Links.isOwnHost(u), true, u);
+  }
+  for (const u of ['https://merecatholicity.com.evil.example/', 'https://notmerecatholicity.com/',
+                   'https://evil.example/?https://merecatholicity.com', 'javascript:alert(1)//merecatholicity.com',
+                   'https://merecatholicity.community/', 'ftp://merecatholicity.com/', '']) {
+    assert.equal(Links.isOwnHost(u), false, u);
+  }
+});
+
+test('the site itself is the apex or www alone: a subdomain is ours but not this app', () => {
+  assert.equal(Links.isOwnSite('https://merecatholicity.com/kjv.html#john-3-16'), true);
+  assert.equal(Links.isOwnSite('https://www.merecatholicity.com'), true);
+  assert.equal(Links.isOwnSite('https://press.merecatholicity.com/'), false);
+});
