@@ -115,7 +115,7 @@ p { overflow-wrap: break-word; }
 .card-sub { font-size: 0.9rem; line-height: 1.4; color: var(--muted-c); }
 .card-author { font: 0.8rem var(--font-sans); color: var(--faint); letter-spacing: 0.05em; text-transform: uppercase; margin-top: 2px; }
 
-/* Buttons: the paperback green, the Kindle gold, and a quiet outline. */
+/* Buttons: the paperback green and the Kindle gold. */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; text-align: center;
   padding: 10px 18px; border-radius: 999px; border: 1px solid transparent;
@@ -125,8 +125,6 @@ p { overflow-wrap: break-word; }
 .btn-paper, .btn-paper:hover { background: var(--buy); border-color: var(--buy); color: var(--buy-on); }
 .btn-kindle, .btn-kindle:hover { background: var(--kindle); border-color: var(--kindle); color: var(--kindle-on); }
 .btn-small { padding: 7px 14px; font-size: 0.85rem; }
-.btn-outline { background: transparent; color: var(--ink-soft); border-color: var(--rule); }
-.btn-outline:hover { color: var(--ink); border-color: var(--muted-c); filter: none; }
 .card-buy { margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 
 /* A title's page. */

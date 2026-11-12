@@ -24,8 +24,6 @@ export interface Title {
   amazon: string;
   /** The Kindle edition's Amazon page, where there is one. */
   kindle?: string;
-  /** A free reading copy, where one exists (the site keeps many). */
-  readFree?: string;
   /** Basename under covers/: an .avif for the page and a .jpg for feeds and link previews. */
   cover: string;
   /** The short blurb: the card and the head of the title's page. */

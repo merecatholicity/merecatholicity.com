@@ -113,7 +113,7 @@ export function jsonLd(route: Route, cat: Catalogue): object {
       author: { "@type": "Person", name: t.author }, publisher: { "@id": org["@id"] },
       image: abs(`/covers/${t.cover}.jpg`), description: t.description.join(" "), inLanguage: "en",
       workExample: [edition("Paperback", t.amazon), ...(t.kindle ? [edition("EBook", t.kindle)] : [])],
-      sameAs: [t.amazon, ...(t.kindle && t.kindle !== t.amazon ? [t.kindle] : []), ...(t.readFree ? [t.readFree] : [])],
+      sameAs: [t.amazon, ...(t.kindle && t.kindle !== t.amazon ? [t.kindle] : [])],
     }],
   };
 }
@@ -202,7 +202,6 @@ function titlePage(t: Title, cat: Catalogue): TemplateResult {
           : html`<div class="book-lead">${t.lead.map(p => html`<p>${p}</p>`)}</div>`}
         <p class="actions">
           ${buy(t)}
-          ${t.readFree ? html`<a class="btn btn-outline" href=${t.readFree} rel="noopener">Read it free online</a>` : nothing}
         </p>
         ${share(t, cat)}
         <div class="book-desc">${t.description.map(p => html`<p>${p}</p>`)}</div>
