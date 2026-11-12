@@ -213,10 +213,31 @@ export function parseFeedScope(raw: unknown): string | null {
   return null;
 }
 
+/* A title is plain text (the journal sets it as textContent), so the inline
+   markdown the body would render is reduced to its words: a link or an image to
+   its text, emphasis, strike and code to what they wrap, an autolink to its
+   address. An underscore counts as emphasis only at a word's edge, so a
+   snake_case name survives. */
+export function plainInline(s: string): string {
+  return s
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/<(https?:\/\/[^>\s]+)>/g, '$1')
+    .replace(/(\*\*|~~)(?=\S)(.*?\S)\1/g, '$2')
+    .replace(/\*(?=\S)([^*]*?\S)\*/g, '$1')
+    .replace(/(^|[^\w])__?(?=\S)(.*?\S)__?(?=[^\w]|$)/g, '$1$2')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /* Turn a Journal post body into { title, body }. The Journal shows forum posts
-   as articles, but posts carry no title, so it is derived:
+   as articles, but posts carry no title, so it is derived, always as plain text
+   (plainInline: a link in the opening line gives the title its words, never its
+   markdown — 2026-11-11, "[Lérins Press](https://…) is the new…" as a title):
      - an explicit leading markdown heading (#, ##, ###) is the title, stripped;
-     - else a SHORT first line is the title verbatim and dropped from the body;
+     - else a SHORT first line is the title and is dropped from the body, unless
+       it carries a link, which would then be lost: that line stays in the body;
      - else a LONG first line yields a trimmed, word-boundary excerpt + ellipsis,
        and the whole body is kept (nothing is lost).
    Pure + tested; returns title:null only for an empty body. */
@@ -228,11 +249,13 @@ export function journalArticle(body: unknown): { title: string | null; body: str
   const firstRaw = i < lines.length ? lines[i] : '';
   const rest = () => lines.slice(i + 1).join('\n').replace(/^\n+/, '');
   const m = firstRaw.match(/^#{1,3}\s+(.+?)\s*#*\s*$/);
-  if (m) return { title: m[1].trim().slice(0, 160), body: rest() };
-  const first = firstRaw.trim();
+  if (m) return { title: plainInline(m[1]).slice(0, 160), body: rest() };
+  const raw = firstRaw.trim();
+  const first = plainInline(raw);
   if (!first) return { title: null, body: src };
   const MAX = 70;
-  if (first.length <= MAX) return { title: first, body: rest() };
+  const linked = /\]\(|<https?:\/\//.test(raw);
+  if (first.length <= MAX) return { title: first, body: linked ? src : rest() };
   let cut = first.slice(0, MAX);
   const sp = cut.lastIndexOf(' ');
   if (sp > 40) cut = cut.slice(0, sp);
