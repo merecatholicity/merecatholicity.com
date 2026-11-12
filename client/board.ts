@@ -2,6 +2,8 @@
    classic board views, the comment renderer, quoting, editing, the board
    composer form, the journal, search, and the post menu. */
 import type { Boot } from './boot';
+/* the journal teaser's lazy membrane, by type only: the module itself is import()ed */
+type JournalKit = typeof import('../app/journal_kit.ts');
 
 export function installBoard(B: Boot) {
   /* Names this module takes from the boot — the root's helpers and the other
@@ -521,7 +523,7 @@ trace('submit: board post');
   }
   /* About three or four lines of the journal's measure (Domain.Comments.journalTeaser). */
   var JOURNAL_TEASER = 420;
-  function journalEntry(a: any, full: any, kit?: any) {
+  function journalEntry(a: any, full: any, kit?: JournalKit | null) {
     var art = el('article', full ? 'journal-entry journal-full' : 'journal-entry');
     art.appendChild(journalDateLine(a));
     var titleText = a.title || fmtDateTime(a.created_at);
@@ -539,7 +541,7 @@ trace('submit: board post');
       art.appendChild(journalShare(a.id));
       return art;
     }
-    var teaser = kit.journalTeaser(JOURNAL_TEASER, a.body);
+    var teaser = kit!.journalTeaser(JOURNAL_TEASER, a.body);
     fillBody(bodyEl, teaser.text);
     if (teaser.more) {
       var more = el('div', 'journal-share');
@@ -556,7 +558,7 @@ trace('submit: board post');
     var wrap = el('div', 'journal');
     section.appendChild(wrap);
     wrap.appendChild(skeleton());
-    var kit: any = null;
+    var kit: JournalKit | null = null;
     Promise.all([
       fetchRetry(API + '/journal?p=' + pageNum, {}, [1000, 3000]).then(function (r) { return r.json(); }),
       /* the teaser's kernel (Domain.Journal) is a chunk of its own, fetched with the list */
