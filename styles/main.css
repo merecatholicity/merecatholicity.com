@@ -1743,6 +1743,20 @@ html:not(.mc-noapp) body:not(.mc-app) main.prose > #title-block-header {
 .mc-home-feat-txt strong { font-size: 1.05rem; color: var(--maroon); }
 .mc-home-feat-txt small { color: var(--faint); font-size: 0.82rem; }
 .mc-home-go { color: var(--faint); font-size: 1.3rem; flex: none; }
+/* Lérins Press's card (app/home.ts HOME_PRESS): the press's own masthead, its shield
+   where the others have an emoji, its name in its gold Cinzel capitals (SIL OFL,
+   docs/fonts, loaded only by this card), its line beneath. */
+@font-face {
+  font-family: "Cinzel"; font-weight: 500; font-display: swap;
+  src: url("/fonts/cinzel-latin-500.woff2") format("woff2");
+}
+.mc-home-press .mc-home-feat-ico { background: none; }
+.mc-home-press .mc-home-feat-ico img { height: 2.7rem; width: auto; display: block; }
+.mc-home-press .mc-home-feat-txt strong {
+  font-family: "Cinzel", Georgia, serif; font-weight: 500; letter-spacing: 0.08em; color: var(--brown);
+}
+.mc-home-press .mc-home-feat-txt em { color: var(--faint); font-size: 0.78rem; font-style: italic; margin-top: 0.1rem; }
+.mc-home-press:hover { border-color: var(--brown); }
 .mc-home-sec { margin: 1.4rem 1rem 0.5rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); }
 .mc-home-shelf { padding: 0 1rem; }
 .mc-home-row {
