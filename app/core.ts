@@ -407,10 +407,6 @@ export const commentsParseEnabledPages = (csv: any): string[] => Comments.parseE
 export const commentsSerializeEnabledPages = (paths: string[]): string => Comments.serializeEnabledPages(paths || []);
 export const commentsPageEnabled = (csv: any, path: string): boolean => Comments.pageEnabled(csv == null ? '' : String(csv))(String(path || ''));
 export const commentsJournalFrom = (v: any): boolean => Comments.journalEnabledFrom(v == null ? '' : String(v));
-/* The journal overview's teaser of an entry (Domain.Comments): whole paragraphs to the
-   limit, or a long first one cut at a sentence; `more` when it is not the whole body. */
-export const journalTeaser = (limit: number, body: unknown): { text: string; more: boolean } =>
-  Comments.journalTeaser(limit | 0)(body == null ? '' : String(body));
 export const commentsPageHref = (page: any): string => Comments.pageHref(String(page || ''));
 
 /* The librarian's reasoning ladder (Domain.Merecat), read by the reader's
