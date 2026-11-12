@@ -37,11 +37,13 @@ export interface Meta {
   book?: Title;
 }
 
-/** The covers' .jpg (make covers) and the lockup preview (make brand). */
+/** The lockup preview (make brand), and each title's card, which the build makes from its
+ *  cover (scripts/cards.ts). The cover itself is the fallback: portrait, so a large card crops it. */
 const OG_IMAGE: Image = { src: "/brand/og.jpg", width: 1200, height: 630,
   alt: "The Lérins Press shield, the name, and Vincent's rule" };
-const coverImage = (t: Title): Image => ({ src: `/covers/${t.cover}.jpg`, width: 800, height: 1199,
-  alt: `Cover of ${t.title}` });
+const cardImage = (t: Title, press: string): Image => t.card
+  ? { src: t.card, width: 1200, height: 630, alt: `The cover of ${t.title} beside its title, from ${press}` }
+  : { src: `/covers/${t.cover}.jpg`, width: 800, height: 1199, alt: `Cover of ${t.title}` };
 
 export function metaOf(route: Route, cat: Catalogue): Meta {
   const { press } = cat;
@@ -55,7 +57,7 @@ export function metaOf(route: Route, cat: Catalogue): Meta {
     case "title": {
       const t = route.title;
       return { title: `${t.title} · ${press.name}`, description: t.lead.join(" "),
-        path: pathOf(route), image: coverImage(t), book: t };
+        path: pathOf(route), image: cardImage(t, press.name), book: t };
     }
     case "missing":
       return { title: `No such page · ${press.name}`, description: press.tagline,
