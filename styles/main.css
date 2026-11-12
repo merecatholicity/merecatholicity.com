@@ -2503,12 +2503,11 @@ body.mc-app > footer { display: none; }
     border-radius: 0.55rem; background: #d33; color: #fff; font-size: 0.62rem; line-height: 1.05rem; text-align: center; font-weight: 700;
   }
   /* Lérins Press under the rail (app/appchrome.ts press()): the press's masthead on
-     the page's own ground, in a thin gold frame, the rail's width. Collapsed, the
+     the page's own ground, unframed, the rail's width. Collapsed, the
      shield alone; a window too short for both shows the rail alone. */
   .mc-sb-press {
     display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.55rem;
     width: var(--mc-sidebar-min); padding: 0.6rem 0.4rem; text-decoration: none;
-    border: 1px solid var(--brown); border-radius: var(--radius-lg);
   }
   .mc-sb-press img { height: 2.6rem; width: auto; display: block; margin: 0; }
   .mc-sb-press-txt { display: none; flex-direction: column; align-items: center; gap: 0.2rem; }
