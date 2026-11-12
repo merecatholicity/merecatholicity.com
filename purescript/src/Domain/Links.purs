@@ -9,6 +9,8 @@ module Domain.Links
   ( normalize
   , platforms
   , maxLen
+  , isOwnSite
+  , isOwnHost
   ) where
 
 import Prelude
@@ -16,6 +18,9 @@ import Data.Foldable (all)
 import Data.Maybe (Maybe(..))
 import Data.String (Pattern(..), drop, indexOf, take, toLower, trim)
 import Data.String.CodeUnits (toCharArray, length)
+import Data.String.Regex (Regex, test)
+import Data.String.Regex.Flags (ignoreCase)
+import Data.String.Regex.Unsafe (unsafeRegex)
 
 maxLen :: Int
 maxLen = 200
@@ -76,3 +81,25 @@ handleOrDomain platform raw =
       else
         let u = platformUrl platform h
         in if u == "" then { ok: false, url: "", error: "bad_platform" } else { ok: true, url: u, error: "" }
+
+-- | Is a link in a post ours? (2026-11-11.) A body link to one of our own hosts
+-- | goes straight there, while anything else passes the off-site warning page
+-- | (away.html). The warning told the owner that press.merecatholicity.com, our own
+-- | publishing arm, was "an off-site resource we don't control".
+-- |
+-- | `isOwnHost` covers merecatholicity.com and every subdomain of it (press.,
+-- | files., audio.). The host must END in `.merecatholicity.com` or be it, so
+-- | `merecatholicity.com.evil.example` and `notmerecatholicity.com` are not ours.
+-- | `isOwnSite` is the apex or www alone: the pages this app itself serves, where a
+-- | link may also be a scripture link into our own Bible.
+isOwnHost :: String -> Boolean
+isOwnHost = test ownHostRe
+
+isOwnSite :: String -> Boolean
+isOwnSite = test ownSiteRe
+
+ownHostRe :: Regex
+ownHostRe = unsafeRegex "^https?://(?:[a-z0-9-]+\\.)*merecatholicity\\.com(?:[/?#]|$)" ignoreCase
+
+ownSiteRe :: Regex
+ownSiteRe = unsafeRegex "^https?://(?:www\\.)?merecatholicity\\.com(?:[/?#]|$)" ignoreCase

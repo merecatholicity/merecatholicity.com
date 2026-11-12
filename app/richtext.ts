@@ -144,9 +144,13 @@ function el(tag: string, cls?: string | null, text?: string | null): HTMLElement
       } else {
         var url = m[3] !== undefined ? m[4] : m[0];
         var a = el('a', 'body-link', m[3] !== undefined ? m[3] : m[0]) as HTMLAnchorElement;
-        if (/^https?:\/\/(?:www\.)?merecatholicity\.com(?:[\/?#]|$)/i.test(url)) {
+        if (Core.isOwnSite(url)) {
           a.href = url;
           scriptureDecor(a, url);
+        } else if (Core.isOwnHost(url)) {
+          /* One of our own subdomains (press., files., audio.): ours, so no
+             warning, but not a page of this app. */
+          a.href = url;
         } else {
           /* Off-site: link to our own warning page, which names the destination
              and requires a click. rel keeps referrer/opener from leaking and
