@@ -2,6 +2,8 @@
    classic board views, the comment renderer, quoting, editing, the board
    composer form, the journal, search, and the post menu. */
 import type { Boot } from './boot';
+/* the journal teaser's lazy membrane, by type only: the module itself is import()ed */
+type JournalKit = typeof import('../app/journal_kit.ts');
 
 export function installBoard(B: Boot) {
   /* Names this module takes from the boot — the root's helpers and the other
@@ -519,7 +521,9 @@ trace('submit: board post');
     wrap.appendChild(copy);
     return wrap;
   }
-  function journalEntry(a: any, full: any) {
+  /* About three or four lines of the journal's measure (Domain.Comments.journalTeaser). */
+  var JOURNAL_TEASER = 420;
+  function journalEntry(a: any, full: any, kit?: JournalKit | null) {
     var art = el('article', full ? 'journal-entry journal-full' : 'journal-entry');
     art.appendChild(journalDateLine(a));
     var titleText = a.title || fmtDateTime(a.created_at);
@@ -528,9 +532,24 @@ trace('submit: board post');
     else { var link = el('a', null, titleText); link.href = 'journal.html?a=' + a.id; h.appendChild(link); }
     art.appendChild(h);
     var bodyEl = el('div', 'journal-body prose');
-    fillBody(bodyEl, a.body);
     art.appendChild(bodyEl);
-    art.appendChild(journalShare(a.id));
+    /* The overview is teasers, the entry's page the whole (the owner, 2026-11-11):
+       there a reader is offered the rest, and the permalink and Copy link stay on
+       the entry's own page. */
+    if (full) {
+      fillBody(bodyEl, a.body);
+      art.appendChild(journalShare(a.id));
+      return art;
+    }
+    var teaser = kit!.journalTeaser(JOURNAL_TEASER, a.body);
+    fillBody(bodyEl, teaser.text);
+    if (teaser.more) {
+      var more = el('div', 'journal-share');
+      var go = el('a', 'journal-permalink', 'Continue reading ›') as HTMLAnchorElement;
+      go.href = 'journal.html?a=' + a.id;
+      more.appendChild(go);
+      art.appendChild(more);
+    }
     return art;
   }
   function viewJournal() {
@@ -539,9 +558,14 @@ trace('submit: board post');
     var wrap = el('div', 'journal');
     section.appendChild(wrap);
     wrap.appendChild(skeleton());
-    fetchRetry(API + '/journal?p=' + pageNum, {}, [1000, 3000])
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
+    var kit: JournalKit | null = null;
+    Promise.all([
+      fetchRetry(API + '/journal?p=' + pageNum, {}, [1000, 3000]).then(function (r) { return r.json(); }),
+      /* the teaser's kernel (Domain.Journal) is a chunk of its own, fetched with the list */
+      import('../app/journal_kit.ts').then(function (k) { kit = k; }),
+    ])
+      .then(function (both) {
+        var d = both[0];
         wrap.textContent = '';
         if (!d.ok) { wrap.appendChild(el('p', 'comments-status', d.error || 'The journal could not be loaded.')); return; }
         document.title = (d.journal || 'Journal') + ' | Mere Catholicity';
@@ -550,7 +574,7 @@ trace('submit: board post');
         head.appendChild(el('p', 'journal-tagline', 'Essays and notes from Mere Catholicity.'));
         wrap.appendChild(head);
         if (!d.articles || !d.articles.length) { wrap.appendChild(el('p', 'comments-status', 'No entries yet.')); return; }
-        d.articles.forEach(function (a: any) { wrap.appendChild(journalEntry(a, false)); });
+        d.articles.forEach(function (a: any) { wrap.appendChild(journalEntry(a, false, kit)); });
         var bar = pageBar(d.total, d.per, d.page, function (i: any) { return 'journal.html?p=' + i; });
         if (bar) wrap.appendChild(bar);
       })
