@@ -1273,7 +1273,7 @@ class McSidebar extends LitElement {
         <span class="mc-sb-press-tag">${p.sub}</span>
         <span class="mc-sb-press-rule" aria-hidden="true"><i></i></span>
         <span class="mc-sb-press-more">${p.more}</span>
-        <span class="mc-sb-press-go">Visit the press ›</span>
+        <span class="mc-sb-press-go">Visit the bookstore ›</span>
       </span>
     </a>`;
   }
