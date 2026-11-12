@@ -16,10 +16,10 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { HOME_FEATURES, HOME_SECTIONS, homeTree, toHtml, toDom, fillCont, mountLauncher, lastReadPos }
+import { HOME_FEATURES, HOME_PRESS, HOME_SECTIONS, homeTree, toHtml, toDom, fillCont, mountLauncher, lastReadPos }
   from '../../app/home.ts';
 import { prerendered } from '../../scripts/home_prerender.ts';
 
@@ -33,7 +33,7 @@ const CSS = readFileSync(join(root, 'styles', 'main.css'), 'utf8');
 type FakeNode = any;
 type FakeDoc = { createTextNode(t: string): FakeNode; createElement(tag: string): FakeNode };
 function fakeDoc() {
-  const VOID: Record<string, boolean> = { hr: true };
+  const VOID: Record<string, boolean> = { hr: true, img: true };
   const doc: FakeDoc = {
     createTextNode: (t) => ({ text: t, ser() { return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/ /g, '&nbsp;'); } }),
     createElement: (tag) => {
@@ -82,7 +82,7 @@ test('every launcher link is in the page, once', () => {
   /* less the Continue row, whose placeholder link is the Library's */
   const block = PAGE.slice(PAGE.indexOf('<mc-home>'), PAGE.indexOf('</mc-home>'))
     .replace(/<a class="mc-home-feat mc-home-cont"[^]*?<\/a>/, '');
-  const hrefs = HOME_FEATURES.map((f) => f.href).concat(...HOME_SECTIONS.map((s) => s.items.map((i) => i.href)));
+  const hrefs = HOME_FEATURES.map((f) => f.href).concat(HOME_PRESS.href, ...HOME_SECTIONS.map((s) => s.items.map((i) => i.href)));
   for (const h of hrefs) {
     assert.equal(block.split('href="' + h + '"').length - 1, 1, h);
   }
@@ -146,4 +146,16 @@ test('the newest reading position wins, and a broken entry is skipped', () => {
   ];
   const store = { length: entries.length, key: (i: number) => entries[i][0], getItem: (k: string) => (entries.find((e) => e[0] === k) || [])[1] };
   assert.deepEqual(lastReadPos(store), { href: 'npnf101.html', title: 'Augustine' });
+});
+
+test('the press card is a plain first-party link, with nothing a blocker could name', () => {
+  /* Lérins Press (2026-11-11): one more launcher card, not an advertisement. */
+  assert.match(HOME_PRESS.href, /^https:\/\/press\.merecatholicity\.com\//);
+  const card = PAGE.slice(PAGE.indexOf('<a class="mc-home-feat mc-home-press"'));
+  const html = card.slice(0, card.indexOf('</a>') + 4);
+  assert.ok(html.includes('src="' + HOME_PRESS.shield + '"'), 'the shield is in the painted card');
+  assert.doesNotMatch(html + HOME_PRESS.shield, /\b(ad|ads|advert\w*|banner|promo\w*|sponsor\w*)\b/i);
+  assert.doesNotMatch(html, /rel="[^"]*sponsored/, 'our own press, not a paid placement');
+  assert.ok(existsSync(join(root, 'docs', HOME_PRESS.shield)), HOME_PRESS.shield);
+  assert.ok(existsSync(join(root, 'docs', 'fonts', 'cinzel-latin-500.woff2')), 'the Cinzel face the card names');
 });

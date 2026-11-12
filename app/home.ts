@@ -39,6 +39,17 @@ export const HOME_FEATURES = [
   { icon: '📰', title: 'Journal', sub: 'The Mere Catholicity Journal', href: 'journal.html' },
 ];
 
+/* Lérins Press (2026-11-11): the publishing arm, at its own subdomain. One more
+   card of the launcher, after the features, dressed as the press's own masthead
+   (its shield, its name in its gold capitals, its line) and not as an
+   advertisement. It is a plain first-party link: no "ad", "promo" or "banner" in a
+   class, a path or a name, so no blocker's list has anything to match. */
+export const HOME_PRESS = {
+  title: 'Lérins Press', sub: 'The publishing arm of Mere Catholicity',
+  more: 'Our books in paperback and on Kindle',
+  href: 'https://press.merecatholicity.com/', shield: 'theme/lerins-shield.webp',
+};
+
 /* The reading shelf, grouped the way a newcomer reads it. Surfaces the rest of
    the site nav (Contact lives only in the footer, kept quiet by design — not
    here; Library + Journal are up in the feature cards, not repeated here). */
@@ -92,6 +103,15 @@ function feat(icon: string, title: string, sub: string, href: string, extra?: st
   ] };
 }
 
+function pressCard(): HNode {
+  const p = HOME_PRESS;
+  return { t: 'a', c: 'mc-home-feat mc-home-press', a: { href: p.href }, k: [
+    { t: 'span', c: 'mc-home-feat-ico', k: [{ t: 'img', a: { src: p.shield, alt: '', width: '88', height: '144' } }] },
+    { t: 'span', c: 'mc-home-feat-txt', k: [{ t: 'strong', k: [p.title] }, { t: 'small', k: [p.sub] }, { t: 'em', k: [p.more] }] },
+    go,
+  ] };
+}
+
 /* The whole launcher. The Continue row is always present and starts hidden
    (.mc-home-cont, shown by html.mc-cont or .mc-on): its link and title are the
    placeholders fillCont() replaces. */
@@ -108,7 +128,7 @@ export function homeTree(): HNode {
     { t: 'div', c: 'mc-home-hero', k: [{ t: 'span', c: 'mc-home-cross', k: ['✝'] }, { t: 'p', k: ['One, holy, catholic, and apostolic.'] }] },
     { t: 'hr', c: 'mc-home-rule' },
     { t: 'div', c: 'mc-home-feats', k: [feat('📖', 'Continue reading', '\u00a0', 'library.html', 'mc-home-cont')]
-      .concat(HOME_FEATURES.map((f) => feat(f.icon, f.title, f.sub, f.href))) },
+      .concat(HOME_FEATURES.map((f) => feat(f.icon, f.title, f.sub, f.href)), [pressCard()]) },
   ];
   return { t: 'div', c: 'mc-home', k: head.concat(shelf) };
 }
