@@ -60,7 +60,13 @@ body {
 body::before {
   content: "";
   position: fixed;
-  inset: 0;
+  /* Sized to the LARGE viewport (lvh), not inset: 0. A phone's address bar shows and
+     hides as the page scrolls, and a layer pinned to all four edges resized with it,
+     so the contained painting rescaled and jumped under the reader's thumb. 100lvh
+     is the height with the bars hidden and never changes while scrolling. */
+  top: 0; left: 0; right: 0;
+  height: 100vh;
+  height: 100lvh;
   z-index: -1;
   pointer-events: none;
   background: url("/art/augustine-m.webp") center bottom / contain no-repeat;
@@ -72,6 +78,7 @@ body::before {
     background-image: url("/art/augustine-d.webp");
     background-position: right center;
     background-size: auto 88vh;
+    background-size: auto 88lvh;
     opacity: 0.18;
   }
 }
