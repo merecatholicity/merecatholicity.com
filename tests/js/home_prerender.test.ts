@@ -159,3 +159,14 @@ test('the press card is a plain first-party link, with nothing a blocker could n
   assert.ok(existsSync(join(root, 'docs', HOME_PRESS.shield)), HOME_PRESS.shield);
   assert.ok(existsSync(join(root, 'docs', 'fonts', 'cinzel-latin-500.woff2')), 'the Cinzel face the card names');
 });
+
+test('the desktop rail carries the same press, under the same rule', () => {
+  /* The card under the left menu (app/appchrome.ts press(), 2026-11-11) reads HOME_PRESS. */
+  const chrome = readFileSync(join(root, 'app', 'appchrome.ts'), 'utf8');
+  const at = chrome.indexOf('  press() {');
+  assert.ok(at > 0, 'McSidebar has its press() card');
+  const block = chrome.slice(at, chrome.indexOf('\n  render() {', at));
+  assert.match(block, /href=\$\{p\.href\}/);
+  assert.doesNotMatch(block.replace(/\/\*[\s\S]*?\*\//g, ''), /\b(ad|ads|advert\w*|banner|promo\w*|sponsor\w*)\b/i);
+  assert.match(chrome, /<\/nav>\$\{this\.press\(\)\}<\/div>/, 'the card stands under the menu');
+});

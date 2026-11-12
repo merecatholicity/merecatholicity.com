@@ -16,7 +16,7 @@ import { mountLibrary } from './views/library.ts';
 import { notifLabel, notifHref, tapExcursion, tapVerdict, tapEchoMs } from './core.ts';
 import { urlBase64ToUint8Array, healPushSubscription, browserPushEnv } from './push.ts';
 import { installArtWarm } from './artwarm.ts';
-import { lastReadPos, mountLauncher } from './home.ts';
+import { HOME_PRESS, lastReadPos, mountLauncher } from './home.ts';
 
 /* Crisp stroke icons (Feather-ish, 24×24, currentColor) so the chrome reads as an
    app, not a website. Static SVG templates — no unsafe injection. The Merecat
@@ -1259,8 +1259,26 @@ class McSidebar extends LitElement {
     try { localStorage.setItem('mc-sidebar', this.wide ? 'wide' : 'icons'); } catch (e) { /* blocked */ }
     this._applyBody();
   }
+  /* Lérins Press under the rail (2026-11-11): the owner's ask, a "traditional
+     advertisement" on desktop, below the menu. The press's own masthead in a
+     card the rail's width: shield, name in its gold capitals, line, offer, and a
+     way in. Collapsed, the rail keeps only the shield. First-party, and named
+     for what it is (no ad, promo, banner or sponsor) like the Home card. */
+  press() {
+    const p = HOME_PRESS;
+    return html`<a class="mc-sb-press" href=${p.href} title=${p.title} aria-label=${p.title + ', ' + p.sub.toLowerCase() + '. ' + p.more}>
+      <img src=${p.shield} alt="" width="88" height="144">
+      <span class="mc-sb-press-txt">
+        <span class="mc-sb-press-name">${p.title}</span>
+        <span class="mc-sb-press-tag">${p.sub}</span>
+        <span class="mc-sb-press-rule" aria-hidden="true"><i></i></span>
+        <span class="mc-sb-press-more">${p.more}</span>
+        <span class="mc-sb-press-go">Visit the press ›</span>
+      </span>
+    </a>`;
+  }
   render() {
-    return html`<nav class=${'mc-sidebar' + (this.wide ? ' mc-sb-wide' : '')} aria-label="Primary">
+    return html`<div class=${'mc-sb-stack' + (this.wide ? ' mc-sb-wide' : '')}><nav class=${'mc-sidebar' + (this.wide ? ' mc-sb-wide' : '')} aria-label="Primary">
       <button class="mc-sb-toggle" @click=${() => this.toggle()} aria-label=${this.wide ? 'Collapse menu' : 'Expand menu'} title=${this.wide ? 'Collapse' : 'Expand'}>${this.wide ? ICON.back : ICON.forward}</button>
       ${visibleTabs().map((t) => {
         const n = t.badge === 'dm' ? this.dm : 0;
@@ -1283,7 +1301,7 @@ class McSidebar extends LitElement {
         const cls = 'mc-sb-item' + (lit === t.key ? ' mc-tab-on' : '');
         return html`<a class=${cls} href=${t.href} aria-label=${badgeLabel(t.label, n)} title=${t.label}>${inner}</a>`;
       })}
-    </nav>`;
+    </nav>${this.press()}</div>`;
   }
 }
 customElements.define('mc-sidebar', McSidebar);
