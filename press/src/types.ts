@@ -29,6 +29,9 @@ export interface Title {
   /** The short blurb: the card and the head of the title's page. */
   lead: string[];
   description: string[];
+  /** The link-preview card's path (1200x630, scripts/cards.ts). The build fills it: never
+   *  written in titles.json. */
+  card?: string;
 }
 
 export interface Catalogue {

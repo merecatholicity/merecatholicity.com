@@ -1,5 +1,6 @@
 // Build the press into dist/: one prerendered HTML page per route, the client bundle,
-// the stylesheet, the covers, the sitemap, the RSS feed and robots.txt.
+// the stylesheet, the covers, each title's link-preview card, the sitemap, the RSS feed and
+// robots.txt.
 //
 //   node scripts/build.ts            (PRESS_URL=... to build for another origin)
 //
@@ -13,6 +14,7 @@ import { build } from "esbuild";
 import { render } from "@lit-labs/ssr";
 import { collectResultSync } from "@lit-labs/ssr/lib/render-result.js";
 import type { Catalogue, Press, Route, Title } from "../src/types.ts";
+import { cardMaker } from "./cards.ts";
 import { headTags, jsonLd, metaOf, page, pathOf } from "../src/views.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -62,6 +64,17 @@ writeFileSync(join(DIST, cssName), css);
 
 cpSync(join(ROOT, "content/covers"), join(DIST, "covers"), { recursive: true });
 cpSync(join(ROOT, "static"), DIST, { recursive: true });
+
+// Each title's link-preview card (scripts/cards.ts), named by its hash: a crawler caches a
+// preview by its URL, so a changed cover or title must arrive under a new one. The name rides
+// the catalogue, so the head a hop rewrites names it too.
+mkdirSync(join(DIST, "cards"));
+const card = cardMaker(ROOT, press);
+for (const t of titles) {
+  const jpg = await card(t, readFileSync(join(ROOT, "content/covers", `${t.cover}.jpg`)));
+  t.card = `/cards/${t.slug}-${hash(jpg)}.jpg`;
+  writeFileSync(join(DIST, t.card), jpg);
+}
 
 // The catalogue rides every page; "<" is escaped so no title can close the script.
 const data = JSON.stringify(cat).replace(/</g, "\\u003c");
