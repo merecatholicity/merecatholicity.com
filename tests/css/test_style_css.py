@@ -543,11 +543,9 @@ class DesktopPreShellPaint(unittest.TestCase):
         self.assertIn("pointer-events:none", bar.group(1), "a placeholder must never take a press")
         self.assertRegex(bar.group(1), r"content:(''|\"\")", "an empty box, as on the phone")
 
-    def test_the_title_and_toggle_are_where_the_shell_puts_them(self):
+    def test_the_title_is_where_the_shell_puts_it(self):
         self.assertRegex(self.css, r"html:not\(\.mc-noapp\) body:not\(\.mc-app\) main\.prose>\.home-title[^{]*\{clip:",
                          "the title is visually hidden from the first frame, as the shell hides it")
-        self.assertIn("html:not(.mc-noapp) .theme-toggle{top:auto;bottom:1rem}", self.css,
-                      "the toggle sits in its shell corner from the start, or it jumps when the shell lands")
 
     def test_the_home_launcher_is_one_width_in_every_state(self):
         self.assertRegex(self.css, r"@media \(min-width:992px\)\{\.mc-home\{max-width:none}",

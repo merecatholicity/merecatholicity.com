@@ -988,7 +988,7 @@ a.comment-delete { color: var(--muted-c); margin-left: 0.9em; font-size: 0.85em;
 .comment-menu-pop a:hover, .comment-menu-pop button:hover {
   background: color-mix(in srgb, var(--maroon) 8%, transparent); color: var(--maroon);
 }
-.comment-menu-pop a.comment-delete, .comment-menu-pop a.dm-del { color: var(--maroon); }
+.comment-menu-pop a.comment-delete { color: var(--maroon); }
 .comment-menu-sheet a, .comment-menu-sheet button {
   display: block; width: 100%; text-align: left; font: inherit; font-size: 1rem;
   color: var(--ink); background: none; border: 0; cursor: pointer; text-decoration: none;
@@ -1054,7 +1054,6 @@ a.comment-quote-link:hover { text-decoration: underline; color: var(--maroon); }
 .md-btn:hover { border-color: var(--maroon); background: rgba(139, 26, 26, 0.06); }
 .md-btn.md-b { font-weight: 700; }
 .md-btn.md-i { font-style: italic; }
-.md-legend { margin: 0.35em 0 0; color: var(--muted-c); font-size: 0.95rem; overflow-wrap: anywhere; }
 /* Off-site link warning page (away.html). */
 .away { max-width: 34rem; margin: 2.5rem auto; text-align: center; }
 .away-head { font-size: 1.4rem; margin: 0 0 0.6em; border-bottom: none; }
@@ -1377,61 +1376,6 @@ a.body-link { color: var(--maroon); overflow-wrap: anywhere; }
 .topic-pages { margin: 0.15em 0 0; font-size: 0.8rem; color: var(--faintest); }
 .topic-pages a { margin-right: 0.35em; }
 
-/* ============================ 10-toggle.css ============================ */
-/* Light/dark toggle. A slider in the top-right corner, in normal flow (absolute,
-   not fixed) so it scrolls off the page with everything else. nav.js builds it
-   and flips :root[data-theme]; the knob slides to the moon in dark. */
-.theme-toggle {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.6rem;
-  z-index: 40;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4em;
-  background: none;
-  border: 0;
-  padding: 0.15rem;
-  margin: 0;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.72rem;
-  letter-spacing: 0.03em;
-  color: var(--faint);
-  -webkit-tap-highlight-color: transparent;
-}
-.theme-toggle .theme-label { display: none; }
-@media (min-width: 601px) { .theme-toggle .theme-label { display: inline; } }
-.theme-switch {
-  position: relative;
-  width: 42px;
-  height: 22px;
-  flex: none;
-  border-radius: 999px;
-  background: var(--rule);
-  border: 1px solid var(--rule);
-  transition: background 0.2s ease;
-}
-.theme-knob {
-  position: absolute;
-  top: 1px;
-  left: 1px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--surface);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  line-height: 1;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  transition: transform 0.2s ease;
-}
-:root[data-theme="dark"] .theme-knob { transform: translateX(20px); }
-/* On phones the fixed hamburger owns the top-right corner, so the toggle moves
-   to the top-left and still scrolls away. */
-@media (max-width: 600px) { .theme-toggle { top: 1.15rem; left: 0.85rem; right: auto; } }
 
 /* A couple of dark-mode surface touches for panels that carried their own light
    backgrounds. */
@@ -1560,9 +1504,8 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
     .comment textarea, .comment input { -webkit-user-select: text; user-select: text; }
   }
 
-  /* gated off on mobile: the app chrome replaces the site menu + theme toggle */
+  /* gated off on mobile: the app chrome replaces the site menu */
   nav.site { display: none !important; }
-  .theme-toggle { display: none !important; }
 
   /* room for the fixed bars */
   body {
@@ -1751,7 +1694,7 @@ html:not(.mc-noapp) body:not(.mc-app) main.prose > #title-block-header {
   src: url("/fonts/cinzel-latin-500.woff2") format("woff2");
 }
 .mc-home-press .mc-home-feat-ico { background: none; }
-.mc-home-press .mc-home-feat-ico img { height: 2.7rem; width: auto; display: block; }
+.mc-home-press .mc-home-feat-ico img { height: 2.7rem; width: auto; display: block; margin: 0; }
 .mc-home-press .mc-home-feat-txt strong {
   font-family: "Cinzel", Georgia, serif; font-weight: 500; letter-spacing: 0.08em; color: var(--brown);
 }
@@ -2261,12 +2204,12 @@ nav.site { display: none !important; }
 /* ---- system-sans on the platform UI (ungated) ---- */
 /* Applied to UI CONTAINERS; their descendants inherit. Long-form article prose is
    NOT in any of these containers, so it keeps the body serif. */
-nav.site, .theme-toggle,
+nav.site,
 .btn, .btn-read, .btn-pdf, .btn-amazon, .btn-send, .btn-anon, .md-btn,
 section.comments, .board-cats, .board-topics, .board-crumb, .board-pages,
 .user-list, .profile, .mc-cardnav, .mc-screen-title,
 mc-deskbar, mc-appbar, mc-tabbar, mc-sheet, mc-home, mc-settings,
-.bible-bar, .bible-player, .bp-btn, .bp-time, .bp-title, .bible-chapters,
+.bible-bar, .bible-player, .bp-time, .bible-chapters,
 .bible-chap, .bible-chap-grid, .bible-step, .bible-lbl, .bible-loading, .bible-hit {
   font-family: var(--font-sans);
 }
@@ -2417,7 +2360,6 @@ body.mc-app > footer { display: none; }
   }
   .mc-db-ico .mc-ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
   .mc-db-ico:hover { background: var(--cream); color: var(--maroon); }
-  .mc-db-merecat { font-size: 1.35rem; }
   .mc-db-cluster .mc-tab-badge {
     position: absolute; top: 0.15rem; right: 0.15rem; min-width: 1.05rem; height: 1.05rem; padding: 0 0.22rem;
     border-radius: 0.55rem; background: #d33; color: #fff; font-size: 0.62rem; line-height: 1.05rem;
@@ -2458,11 +2400,6 @@ body.mc-app > footer { display: none; }
   .mc-db-menu .mc-set-switch.on { background: var(--maroon); }
   .mc-db-menu .mc-set-knob { position: absolute; top: 2px; left: 2px; width: 1.1rem; height: 1.1rem; border-radius: 50%; background: #fff; transition: transform var(--tap); }
   .mc-db-menu .mc-set-switch.on .mc-set-knob { transform: translateX(1.1rem); }
-
-  /* keep the corner light/dark toggle out of the fixed bar's way (logged-out
-     readers reach theme here; logged-in also have it in the account menu) —
-     from the first frame the shell is coming, or it jumps corners when it lands */
-  html:not(.mc-noapp) .theme-toggle { top: auto; bottom: 1rem; }
 
   /* ---- fat buttons + real hover ---- */
   .btn, .btn-send, .btn-anon {
@@ -2514,10 +2451,10 @@ body.mc-app > footer { display: none; }
   .board-pages strong { background: var(--accent-fill); color: var(--accent-on); }
 
   /* ---- the content nav, modernized to read as one header with the deskbar ---- */
-  nav.site .nav-list > li > a, nav.site .nav-list > li > .nav-parent {
+  nav.site .nav-list > li > a {
     border-radius: 8px; transition: background var(--tap), color var(--tap);
   }
-  nav.site .nav-list > li > a:hover, nav.site .nav-list > li > .nav-parent:hover { background: var(--cream); }
+  nav.site .nav-list > li > a:hover { background: var(--cream); }
 
   /* ---- the LEFT app-bar: the mobile tabs stood up as a floating, vertically-
      centered rail (GNOME/Facebook-inspired). Wide with labels by default; the
@@ -2529,10 +2466,13 @@ body.mc-app > footer { display: none; }
      rail there — not at the window edge — reads [rail + content] as one optically
      centred unit and collapses the ~340px left void. max(0.7rem, …) keeps it on
      screen when the viewport is narrower than the frame. */
-  .mc-sidebar {
+  .mc-sb-stack {
     position: fixed; left: max(0.7rem, calc(50vw - var(--frame) / 2)); top: 50%; transform: translateY(-50%); z-index: 44;
+    display: flex; flex-direction: column; gap: 0.75rem; transition: left var(--tap);
+  }
+  .mc-sidebar {
     display: flex; flex-direction: column; gap: 0.15rem; padding: 0.5rem;
-    width: var(--mc-sidebar-min); transition: width var(--tap), left var(--tap);
+    width: var(--mc-sidebar-min); transition: width var(--tap);
     background: var(--glass); backdrop-filter: saturate(1.4) blur(8px);
     border: 1px solid var(--rule); border-radius: var(--radius-lg); box-shadow: var(--shadow-2);
   }
@@ -2562,6 +2502,33 @@ body.mc-app > footer { display: none; }
     position: absolute; top: 0.15rem; left: 1.95rem; min-width: 1.05rem; height: 1.05rem; padding: 0 0.22rem;
     border-radius: 0.55rem; background: #d33; color: #fff; font-size: 0.62rem; line-height: 1.05rem; text-align: center; font-weight: 700;
   }
+  /* Lérins Press under the rail (app/appchrome.ts press()): the press's masthead,
+     the rail's glass and width. Collapsed, the shield alone; a window too short
+     for both shows the rail alone. */
+  .mc-sb-press {
+    display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.55rem;
+    width: var(--mc-sidebar-min); padding: 0.6rem 0.4rem; text-decoration: none; color: var(--ink);
+    background: var(--glass); backdrop-filter: saturate(1.4) blur(8px);
+    border: 1px solid var(--rule); border-radius: var(--radius-lg); box-shadow: var(--shadow-2);
+  }
+  .mc-sb-press:hover { border-color: var(--brown); }
+  .mc-sb-press img { height: 2.6rem; width: auto; display: block; margin: 0; }
+  .mc-sb-press-txt { display: none; flex-direction: column; align-items: center; gap: 0.2rem; }
+  .mc-sb-wide .mc-sb-press { width: var(--mc-sidebar-w); padding: 1rem 0.9rem 0.9rem; }
+  .mc-sb-wide .mc-sb-press img { height: 4.2rem; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45)); }
+  .mc-sb-wide .mc-sb-press-txt { display: flex; }
+  .mc-sb-press-name { font: 500 1.02rem/1.2 "Cinzel", Georgia, serif; letter-spacing: 0.09em; text-transform: uppercase; color: var(--brown); }
+  .mc-sb-press-tag { font-size: 0.74rem; line-height: 1.35; color: var(--faint); }
+  .mc-sb-press-rule { display: flex; align-items: center; gap: 0.45rem; width: 70%; margin: 0.35rem 0 0.2rem; }
+  .mc-sb-press-rule::before, .mc-sb-press-rule::after { content: ""; flex: 1; border-top: 1px solid var(--brown); }
+  .mc-sb-press-rule i { width: 4px; height: 4px; border-radius: 50%; background: var(--brown); }
+  .mc-sb-press-more { font-family: Georgia, serif; font-style: italic; font-size: 0.9rem; line-height: 1.35; color: var(--ink); }
+  .mc-sb-press-go {
+    margin-top: 0.55rem; padding: 0.32rem 0.85rem; border: 1px solid var(--brown); border-radius: 999px;
+    font-size: 0.78rem; color: var(--brown);
+  }
+  .mc-sb-press:hover .mc-sb-press-go { background: var(--brown); color: var(--cream); }
+  @media (max-height: 699px) { .mc-sb-press { display: none; } }
   /* content clears the floating rail; the expanded rail pushes it further right */
   body.mc-app { padding-left: calc(var(--mc-sidebar-min) + 1.5rem); }
   body.mc-app.mc-sb-wide { padding-left: calc(var(--mc-sidebar-w) + 1.5rem); }
@@ -2950,10 +2917,10 @@ body[data-art]:not(.mc-no-art) main.prose:not(:has(section.board, mc-home, mc-li
 /* Popovers: who-liked + share menu. */
 .wall-pop { z-index: 3200; min-width: 12rem; max-width: 15rem; max-height: 60vh; overflow: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; box-shadow: var(--shadow-2); padding: 0.5rem; }
 .wall-pop-title { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--faint); padding: 0.2rem 0.4rem 0.4rem; }
-.wall-pop-load, .wall-pop-empty, .wall-pop-more { color: var(--faint); font-size: 0.85rem; padding: 0.35rem 0.4rem; }
+.wall-pop-empty, .wall-pop-more { color: var(--faint); font-size: 0.85rem; padding: 0.35rem 0.4rem; }
 .wall-likers-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.4rem; border-radius: 8px; text-decoration: none; color: var(--ink); background: none; }
 .wall-likers-row:hover { background: color-mix(in srgb, var(--maroon) 8%, transparent); }
-.wall-likers-row .comment-avatar, .wall-likers-row .comment-avatar-fallback { width: 1.6rem; height: 1.6rem; }
+.wall-likers-row .comment-avatar { width: 1.6rem; height: 1.6rem; }
 .wall-likers-name { font-size: 0.9rem; }
 .wall-share-item { display: flex; align-items: center; gap: 0.6rem; width: 100%; text-align: left; background: none; border: 0; font: inherit; font-size: 0.92rem; color: var(--ink); cursor: pointer; padding: 0.5rem 0.55rem; border-radius: 8px; text-decoration: none; }
 .wall-share-item:hover { background: color-mix(in srgb, var(--maroon) 8%, transparent); color: var(--maroon); }
