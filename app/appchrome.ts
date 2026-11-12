@@ -1266,7 +1266,7 @@ class McSidebar extends LitElement {
      for what it is (no ad, promo, banner or sponsor) like the Home card. */
   press() {
     const p = HOME_PRESS;
-    return html`<a class="mc-sb-press" href=${p.href} title=${p.title} aria-label=${p.title + ', ' + p.sub.toLowerCase() + '. ' + p.more}>
+    return html`<a class="mc-sb-press" href=${p.href} target="_blank" rel="noopener" title=${p.title} aria-label=${p.title + ', ' + p.sub.toLowerCase() + '. ' + p.more}>
       <img src=${p.shield} alt="" width="88" height="144">
       <span class="mc-sb-press-txt">
         <span class="mc-sb-press-name">${p.title}</span>
