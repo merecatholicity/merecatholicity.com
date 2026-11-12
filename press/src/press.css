@@ -43,13 +43,37 @@
 }
 
 * { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; background: var(--bg); }
 body {
   margin: 0;
-  background: var(--bg);
+  background: transparent;
   color: var(--ink);
   font: 18px/1.65 var(--font-serif);
   overflow-x: clip;
+}
+/* The painting behind every page: merecatholicity.com's own Home art (Augustine), set
+   by the rules that site proved (styles/main.css, "Sacred-art theme accents"). The base
+   colour sits on <html> so the transparent <body> shows a fixed layer behind the
+   content. The feather is baked into the image, never a CSS mask, so it is the same
+   at every window size: on a phone the whole painting is contained at the bottom; from
+   900px it stands in the right margin at 88vh. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: url("/art/augustine-m.webp") center bottom / contain no-repeat;
+  opacity: 0.17;
+  filter: saturate(0.95) brightness(1.06);
+}
+@media (min-width: 900px) {
+  body::before {
+    background-image: url("/art/augustine-d.webp");
+    background-position: right center;
+    background-size: auto 88vh;
+    opacity: 0.18;
+  }
 }
 #app { min-height: 100vh; display: flex; flex-direction: column; }
 main { flex: 1; width: 100%; max-width: var(--measure); margin: 0 auto; padding: 0 var(--page-pad) 64px; }
