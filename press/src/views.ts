@@ -421,7 +421,7 @@ function about(cat: Catalogue): TemplateResult {
       <ul class="further">
         ${press.hope.further.map(f => html`<li><a href=${f.url} rel="noopener">${f.label}</a>: ${f.note}.</li>`)}
       </ul>
-      <p><a href=${press.parent.url} rel="noopener">Visit ${press.parent.name}</a></p>
+      <p class="about-close"><a href="/#books">See the books of ${press.name}</a></p>
     </article>`;
 }
 
