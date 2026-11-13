@@ -41,11 +41,17 @@ createServer((req, res) => {
       status = 404;
     }
   }
-  res.writeHead(status, {
-    "Content-Type": TYPES[extname(file)] ?? "application/octet-stream",
-    "Cache-Control": "no-store",
-  });
-  createReadStream(file).pipe(res);
+  // A request that lands while a rebuild has emptied dist/ gets a 503, not a dead server.
+  const stream = createReadStream(file);
+  stream
+    .on("open", () => {
+      res.writeHead(status, {
+        "Content-Type": TYPES[extname(file)] ?? "application/octet-stream",
+        "Cache-Control": "no-store",
+      });
+      stream.pipe(res);
+    })
+    .on("error", () => { if (!res.headersSent) res.writeHead(503).end("rebuilding, reload"); else res.end(); });
 }).listen(PORT, "127.0.0.1", () => console.log(`Lérins Press at http://127.0.0.1:${PORT}/`));
 
 let timer: NodeJS.Timeout | undefined;

@@ -15,7 +15,7 @@ import { render } from "@lit-labs/ssr";
 import { collectResultSync } from "@lit-labs/ssr/lib/render-result.js";
 import type { Catalogue, Press, Route, Title } from "../src/types.ts";
 import { cardMaker } from "./cards.ts";
-import { headTags, jsonLd, metaOf, page, pathOf } from "../src/views.ts";
+import { headTags, jsonLd, metaOf, page, pathOf, shelves } from "../src/views.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = join(ROOT, "dist");
@@ -27,11 +27,28 @@ const titles = (JSON.parse(read("content/titles.json")) as Title[])
   .slice().sort((a, b) => b.listed.localeCompare(a.listed));
 const cat: Catalogue = { press, titles };
 
-for (const t of titles) {
-  for (const ext of ["avif", "jpg"]) {
-    try { statSync(join(ROOT, "content/covers", `${t.cover}.${ext}`)); }
-    catch { throw new Error(`${t.slug}: missing content/covers/${t.cover}.${ext} (make covers)`); }
+/** A JPEG's width and height, from its first frame header (SOF0 to SOF15, less the markers
+ *  that share the range: DHT, JPG and DAC). */
+function jpegSize(buf: Buffer): [number, number] {
+  for (let i = 2; i + 9 < buf.length; ) {
+    if (buf[i] !== 0xff) { i++; continue; }
+    const m = buf[i + 1];
+    if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc)
+      return [buf.readUInt16BE(i + 7), buf.readUInt16BE(i + 5)];
+    i += 2 + buf.readUInt16BE(i + 2);
   }
+  throw new Error("no JPEG frame header");
+}
+
+// Every cover in its three files (make cover), and its size scaled to the 1000-wide WebP the
+// page names, so each <img> holds exactly its own place while it waits to load.
+for (const t of titles) {
+  for (const f of [`${t.cover}.webp`, `${t.cover}-480.webp`, `${t.cover}.jpg`]) {
+    try { statSync(join(ROOT, "content/covers", f)); }
+    catch { throw new Error(`${t.slug}: missing content/covers/${f} (make cover)`); }
+  }
+  const [w, h] = jpegSize(readFileSync(join(ROOT, "content/covers", `${t.cover}.jpg`)));
+  t.coverSize = [1000, Math.round(h * 1000 / w)];
 }
 
 rmSync(DIST, { recursive: true, force: true });
@@ -69,9 +86,20 @@ cpSync(join(ROOT, "static"), DIST, { recursive: true });
 // preview by its URL, so a changed cover or title must arrive under a new one. The name rides
 // the catalogue, so the head a hop rewrites names it too.
 mkdirSync(join(DIST, "cards"));
+// Drawing a card is most of a build's time, so each is kept in .cache/ under a hash of all it is
+// drawn from (the cover, the words it sets, cards.ts itself): a rebuild draws only what changed.
 const card = cardMaker(ROOT, press);
+const CACHE = join(ROOT, ".cache/cards");
+mkdirSync(CACHE, { recursive: true });
+const cardsSource = readFileSync(join(ROOT, "scripts/cards.ts"));
 for (const t of titles) {
-  const jpg = await card(t, readFileSync(join(ROOT, "content/covers", `${t.cover}.jpg`)));
+  const coverJpg = readFileSync(join(ROOT, "content/covers", `${t.cover}.jpg`));
+  const key = hash(Buffer.concat([cardsSource, coverJpg, Buffer.from(JSON.stringify(
+    [press.name, t.title, t.subtitle, t.format, t.amazon, t.kindle, t.coverSize]))]));
+  const cached = join(CACHE, `${key}.jpg`);
+  let jpg: Buffer;
+  try { jpg = readFileSync(cached); }
+  catch { jpg = await card(t, coverJpg); writeFileSync(cached, jpg); }
   t.card = `/cards/${t.slug}-${hash(jpg)}.jpg`;
   writeFileSync(join(DIST, t.card), jpg);
 }
@@ -107,7 +135,9 @@ ${headTags(meta, cat).map(([a, k, v]) => `<meta ${a}="${k}" content="${esc(v)}">
 `;
 }
 
-const routes: Route[] = [{ kind: "home" }, { kind: "about" }, ...titles.map(title => ({ kind: "title" as const, title }))];
+const routes: Route[] = [{ kind: "home" }, { kind: "about" }, { kind: "contact" },
+  ...shelves(cat).map(collection => ({ kind: "collection" as const, collection })),
+  ...titles.map(title => ({ kind: "title" as const, title }))];
 for (const route of routes) {
   const dir = join(DIST, pathOf(route));
   mkdirSync(dir, { recursive: true });
@@ -136,7 +166,7 @@ const item = (t: Title) => {
     <guid isPermaLink="true">${link}</guid>
     <pubDate>${rfc822(t.listed)}</pubDate>
     <dc:creator>${esc(t.author)}</dc:creator>
-    <description>${esc(t.lead.join(" "))}</description>
+    <description>${esc(metaOf({ kind: "title", title: t }, cat).description)}</description>
     <enclosure url="${abs(`/covers/${t.cover}.jpg`)}" length="${statSync(jpg).size}" type="image/jpeg"/>
   </item>`;
 };

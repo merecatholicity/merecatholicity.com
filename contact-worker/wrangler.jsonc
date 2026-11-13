@@ -15,7 +15,7 @@
   "vars": {
     // Turnstile tokens are accepted only when solved on one of these hosts.
     // Leave unset in local dev so the always-pass test key still works.
-    "TURNSTILE_HOSTNAMES": "merecatholicity.com,www.merecatholicity.com"
+    "TURNSTILE_HOSTNAMES": "merecatholicity.com,www.merecatholicity.com,press.merecatholicity.com"
   },
   "routes": [{ "pattern": "contact-api.merecatholicity.com", "custom_domain": true }]
 }

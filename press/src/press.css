@@ -32,6 +32,10 @@
   --buy-on: #0e2414;
   --kindle: #cba36a;
   --kindle-on: #2b1f0b;
+  /* "Coming soon": the charcoal theme's red fill (--accent-fill and --accent-on there). It is
+     a pill, not a button: there is nothing to press yet. */
+  --soon: #ef6b6b;
+  --soon-on: #2a1113;
   --font-serif: Georgia, 'Palatino Linotype', Palatino, 'URW Palladio L', serif;
   --font-caps: "Cinzel", "Trajan Pro", Georgia, serif;
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -139,9 +143,11 @@ p { overflow-wrap: break-word; }
 .card { display: flex; flex-direction: column; gap: 12px; min-width: 0; width: 100%; max-width: 230px; }
 .card-link { display: flex; flex-direction: column; gap: 4px; color: var(--ink); text-decoration: none; }
 .card-link:hover { color: var(--ink); }
-.cover img { border-radius: 3px; box-shadow: var(--shadow-2); background: var(--cream); aspect-ratio: 1000 / 1499; transition: transform 0.15s ease; }
+/* Each cover's own aspect ratio rides its <img> (views.ts), so its place is held before it loads. */
+.cover img { width: 100%; border-radius: 3px; box-shadow: var(--shadow-2); background: var(--cream); transition: transform 0.15s ease; }
 .card-link .cover { margin-bottom: 10px; }
 .card-link:hover .cover img { transform: translateY(-3px); }
+.card-no { font: 600 0.72rem var(--font-sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
 .card-title { font-size: 1.12rem; line-height: 1.3; }
 .card-sub { font-size: 0.9rem; line-height: 1.4; color: var(--muted-c); }
 .card-author { font: 0.8rem var(--font-sans); color: var(--faint); letter-spacing: 0.05em; text-transform: uppercase; margin-top: 2px; }
@@ -157,14 +163,148 @@ p { overflow-wrap: break-word; }
 .btn-kindle, .btn-kindle:hover { background: var(--kindle); border-color: var(--kindle); color: var(--kindle-on); }
 .btn-small { padding: 7px 14px; font-size: 0.85rem; }
 .card-buy { margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.soon {
+  display: inline-flex; align-items: center; padding: 10px 18px; border-radius: 999px;
+  background: var(--soon); color: var(--soon-on); font: 600 0.95rem/1.2 var(--font-sans);
+  letter-spacing: 0.02em; cursor: default; user-select: none;
+}
+.soon-small { padding: 7px 14px; font-size: 0.85rem; }
+
+/* Featured reads: a row of large slides that scrolls and snaps (a phone swipes it natively).
+   Each slide is a cover on a blurred wash of itself, its words beside it. Once the client is
+   live (.is-live, src/carousel.ts) a slide's words wait off-stage until it is the one in view,
+   then rise in one after another; without the client every slide simply shows. */
+.featured { margin: 8px 0 24px; }
+.featured-track {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 100%; overflow-x: auto;
+  scroll-snap-type: x mandatory; scroll-behavior: smooth; overscroll-behavior-x: contain;
+  scrollbar-width: none; border-radius: 14px; position: relative;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55); outline-offset: 4px;
+}
+.featured-track::-webkit-scrollbar { display: none; }
+.slide {
+  scroll-snap-align: start; scroll-snap-stop: always; position: relative; overflow: hidden; min-width: 0;
+  display: grid; grid-template-columns: minmax(180px, 300px) 1fr; gap: clamp(24px, 5vw, 56px); align-items: center;
+  padding: clamp(28px, 5vw, 56px); background: rgba(25, 28, 32, 0.5); isolation: isolate;
+  /* A held finger swipes: no iOS link preview, no Android image menu, no text selection to
+     take the gesture over. */
+  -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+}
+.slide img { -webkit-user-drag: none; }
+/* A mouse can drag the row (src/carousel.ts): a hand to show it, and no snapping while it moves. */
+@media (hover: hover) and (pointer: fine) { .featured-track { cursor: grab; } }
+.featured-track.is-dragging { cursor: grabbing; scroll-snap-type: none; scroll-behavior: auto; }
+.featured-track.is-dragging a { pointer-events: none; }
+/* From the last slide back to the first: out, jump, in. */
+.featured-track { transition: opacity 0.26s ease; }
+.featured-track.is-wrapping { opacity: 0; }
+/* The wash: the cover itself, blurred, a little transparent so the page's painting shows faintly
+   through it. */
+.slide-wash { position: absolute; inset: -40px; z-index: -1; opacity: 0.7; }
+.slide-wash img { width: 100%; height: 100%; object-fit: cover; filter: blur(42px) saturate(1.3) brightness(0.55); transform: scale(1.15); }
+.slide-wash::after { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, rgba(15, 17, 19, 0.15), rgba(15, 17, 19, 0.72) 55%); }
+.slide-cover { display: block; }
+.slide-cover .cover img { box-shadow: 0 22px 50px rgba(0, 0, 0, 0.7); }
+.slide-text { min-width: 0; }
+.slide-kicker { margin: 0 0 12px; font: 600 0.78rem/1.4 var(--font-sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
+.slide-title { margin: 0; font-weight: normal; font-size: clamp(1.7rem, 4vw, 2.6rem); line-height: 1.12; }
+.slide-title a { color: var(--ink); text-decoration: none; }
+.slide-title a:hover { color: var(--gold); }
+.slide-sub { margin: 10px 0 0; font-style: italic; font-size: 1.1rem; line-height: 1.4; color: var(--ink-soft); }
+.slide-author { margin: 12px 0 0; font: 0.82rem var(--font-sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-c); }
+.slide-lead { margin: 18px 0 0; max-width: 58ch; color: var(--ink-soft); font-size: 1.05rem;
+  display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+.slide-actions { margin: 24px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+.slide-more { font: 0.9rem var(--font-sans); color: var(--ink-soft); text-decoration: none; border-bottom: 1px solid var(--muted-c); }
+.slide-more:hover { color: var(--ink); }
+.slide-more::after { content: " →"; }
+
+/* The entrance: the cover settles and lifts, the words rise in turn. */
+.featured.is-live .slide .cover img { transform: scale(0.92) rotate(-1.5deg); opacity: 0.6;
+  transition: transform 0.9s cubic-bezier(.2, .7, .2, 1), opacity 0.9s ease; }
+.featured.is-live .slide.is-active .cover img { transform: none; opacity: 1; }
+.featured.is-live .slide-text > * { opacity: 0; transform: translateY(14px);
+  transition: opacity 0.6s ease, transform 0.7s cubic-bezier(.2, .7, .2, 1); }
+.featured.is-live .slide.is-active .slide-text > * { opacity: 1; transform: none; }
+.featured.is-live .slide.is-active .slide-text > :nth-child(2) { transition-delay: 0.08s; }
+.featured.is-live .slide.is-active .slide-text > :nth-child(3) { transition-delay: 0.16s; }
+.featured.is-live .slide.is-active .slide-text > :nth-child(4) { transition-delay: 0.24s; }
+.featured.is-live .slide.is-active .slide-text > :nth-child(5) { transition-delay: 0.32s; }
+.featured.is-live .slide.is-active .slide-text > :nth-child(6) { transition-delay: 0.4s; }
+.featured.is-live .slide-wash { opacity: 0; transition: opacity 1.2s ease; }
+.featured.is-live .slide.is-active .slide-wash { opacity: 0.7; }
+
+.featured-nav { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 18px; }
+.featured-step {
+  width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--rule); background: var(--surface);
+  color: var(--ink); font: 1.5rem/1 var(--font-serif); cursor: pointer; display: grid; place-items: center; padding: 0 0 3px;
+}
+.featured-step:hover { border-color: var(--gold); color: var(--gold); }
+.featured-dots { display: flex; gap: 8px; }
+.featured-dot { width: 9px; height: 9px; padding: 0; border-radius: 999px; border: 0; background: var(--rule); cursor: pointer;
+  transition: width 0.3s ease, background 0.3s ease; }
+.featured-dot[aria-current] { width: 26px; background: var(--gold); }
+
+/* The whole catalogue under one head, its filter, then every shelf. */
+.rule-head-books { margin-top: 72px; }
+
+/* The filter: chips where there is room, the native menu on a phone. A rounded bar that sticks
+   just below the top of the window while a long shelf scrolls past, so another collection is
+   always one press away. */
+.filter {
+  position: sticky; top: 10px; z-index: 1; margin: 0 0 8px;
+  padding: 10px 12px; border: 1px solid var(--rule); border-radius: 16px;
+  background: rgba(25, 28, 32, 0.86); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+main > .filter:first-child { margin-top: 18px; }
+.chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.chips a {
+  display: inline-block; padding: 6px 14px; border: 1px solid var(--rule); border-radius: 999px;
+  font: 0.85rem var(--font-sans); color: var(--muted); text-decoration: none; white-space: nowrap;
+}
+.chips a:hover { color: var(--ink); border-color: var(--muted-c); }
+.chips a[aria-current="page"] { background: var(--gold); border-color: var(--gold); color: #1d160a; font-weight: 600; }
+.filter-menu { display: none; align-items: center; gap: 10px; font: 0.8rem var(--font-sans); color: var(--faint);
+  letter-spacing: 0.08em; text-transform: uppercase; }
+.filter-menu select {
+  flex: 1; min-width: 0; padding: 9px 12px; border: 1px solid var(--rule); border-radius: var(--radius);
+  background: var(--surface); color: var(--ink); font: 16px var(--font-sans); letter-spacing: 0; text-transform: none;
+}
+
+/* A collection's run of the shelf: its name (a link to its page), its tagline, a head per part. */
+.collection { margin-top: 56px; }
+.collection-head { margin: 0; text-align: center; font: 500 clamp(1.3rem, 3.4vw, 1.7rem)/1.2 var(--font-caps); letter-spacing: 0.08em; }
+.collection-head a { color: var(--gold); text-decoration: none; }
+.collection-head a:hover { color: var(--ink); }
+.collection-tag { margin: 6px 0 8px; text-align: center; font-style: italic; color: var(--muted-c); }
+.collection-intro { max-width: 680px; margin: 40px auto 8px; text-align: center; }
+.collection-intro h1 { margin: 6px 0 0; font: 500 clamp(1.9rem, 6vw, 2.8rem)/1.15 var(--font-caps); letter-spacing: 0.08em; color: var(--gold); }
+.collection-intro .ornament { margin: 18px auto 20px; }
+.collection-intro > p:not(.ornament):not(.collection-kicker):not(.collection-tagline) { color: var(--ink-soft); text-align: left; }
+.collection-kicker { margin: 0; font: 600 0.75rem var(--font-sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+.collection-tagline { margin: 10px 0 0; font-style: italic; font-size: 1.15rem; color: var(--muted); }
+.part-head {
+  margin: 40px 0 24px; font: 600 0.8rem var(--font-sans); letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--gold);
+}
+/* The marker the client watches to draw the next batch (app.ts): it holds a little room so
+   the shelf's end is never flush with the footer while a batch is coming. */
+.shelf-more { height: 1px; margin: 0; }
 
 /* A title's page. */
-.back { margin: 28px 0 8px; font: 0.9rem var(--font-sans); }
+.back { margin: 28px 0 8px; font: 0.9rem var(--font-sans); display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .back a { color: var(--muted); text-decoration: none; }
 .back a::before { content: "← "; }
 .back a:hover { color: var(--ink); }
 .book { display: grid; grid-template-columns: minmax(200px, 340px) 1fr; gap: 48px; margin-top: 20px; align-items: start; }
 .book-cover { position: sticky; top: 24px; }
+.book-series { margin: 0 0 10px; font: 600 0.78rem/1.5 var(--font-sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
+.book-series a { color: var(--gold); text-decoration: none; }
+.book-series a:hover { color: var(--ink); }
+.book-series span { color: var(--faint); font-weight: normal; }
+.book-pending { font-style: italic; color: var(--faint); }
 .book h1 { margin: 0; font-weight: normal; font-size: clamp(1.9rem, 4.5vw, 2.7rem); line-height: 1.15; }
 .book-sub { margin: 10px 0 0; font-size: 1.2rem; line-height: 1.4; color: var(--ink-soft); font-style: italic; }
 .book-by { margin: 14px 0 0; font: 0.85rem var(--font-sans); color: var(--faint); letter-spacing: 0.05em; text-transform: uppercase; }
@@ -190,6 +330,26 @@ p { overflow-wrap: break-word; }
 .motto-block p[lang="la"] { font-style: italic; color: var(--gold); }
 .motto-block footer { margin-top: 8px; font: 0.8rem var(--font-sans); color: var(--faint); }
 
+/* Write to the press, its own page. Every field is 16px or more, so a phone never zooms in on
+   focus; the red Send is the charcoal theme's, as on merecatholicity.com/contact. */
+#press-contact { display: flex; flex-direction: column; gap: 16px; margin-top: 28px; }
+.contact-row { display: flex; flex-wrap: wrap; gap: 16px; }
+.contact-row label { flex: 1 1 240px; min-width: 0; }
+#press-contact label { display: flex; flex-direction: column; gap: 6px; font: 0.85rem var(--font-sans); color: var(--muted); }
+#press-contact input, #press-contact textarea {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--rule); border-radius: var(--radius);
+  background: var(--surface); color: var(--ink); font: 16px/1.5 var(--font-serif);
+}
+#press-contact textarea { resize: vertical; min-height: 120px; }
+#press-contact input:focus, #press-contact textarea:focus { outline: none; border-color: var(--gold); }
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.contact-ts:empty { display: none; }
+.contact-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; }
+.btn-send, .btn-send:hover { background: var(--soon); border-color: var(--soon); color: var(--soon-on); cursor: pointer; }
+.btn-send:disabled { opacity: 0.6; cursor: progress; }
+.contact-status { margin: 0; font: 0.9rem var(--font-sans); color: var(--muted); }
+.contact-status:empty { display: none; }
+
 /* The colophon: every page ends on the mark, like the last leaf of a book. */
 .colophon {
   width: 100%; border-top: 1px solid var(--rule); padding: 36px var(--page-pad) 48px;
@@ -202,20 +362,33 @@ p { overflow-wrap: break-word; }
 .colophon-links a:hover { color: var(--ink); }
 
 @media (max-width: 720px) {
+  .slide { grid-template-columns: 1fr; justify-items: center; text-align: center; gap: 22px; padding: 28px 20px 30px; }
+  .slide-cover { width: 56%; max-width: 230px; }
+  .slide-wash::after { background: linear-gradient(180deg, rgba(15, 17, 19, 0.15), rgba(15, 17, 19, 0.75) 50%); }
+  .slide-lead { -webkit-line-clamp: 4; margin-left: auto; margin-right: auto; }
+  .slide-actions { justify-content: center; }
   .book { grid-template-columns: 1fr; gap: 28px; }
   .book-cover { position: static; max-width: 260px; margin: 0 auto; width: 70%; }
   .hero { padding: 32px 0 28px; }
   /* A card's cover never outgrows the book page's own (260px at this width): a card stops
      at 230px and stands centred in its column, under the centred motto. */
   .shelf { justify-items: center; }
+  .chips { display: none; }
+  .filter-menu { display: flex; }
 }
 @media (max-width: 480px) {
   body { font-size: 17px; }
   .masthead { padding-top: 14px; padding-bottom: 14px; }
   .mark { height: 46px; }
+  /* A long head ("Lérins Newman Collection") keeps one line and its rules on a phone. */
+  .rule-head { font-size: 0.95rem; letter-spacing: 0.1em; gap: 12px; text-align: center; }
   .shelf { gap: 32px 16px; }
-  .card-buy .btn-small { flex: 1 1 auto; }
+  .card-buy .btn-small, .card-buy .soon-small { flex: 1 1 auto; justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) {
   .cover img { transition: none; }
+  .featured-track { scroll-behavior: auto; }
+  .featured.is-live .slide .cover img, .featured.is-live .slide-text > *, .featured.is-live .slide-wash {
+    transition: none; transform: none; opacity: 1; }
+  .featured.is-live .slide-wash { opacity: 0.7; }
 }

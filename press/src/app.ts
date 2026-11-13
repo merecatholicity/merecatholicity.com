@@ -3,7 +3,9 @@
 import { render } from "lit";
 import { hydrate } from "@lit-labs/ssr-client";
 import type { Catalogue, Route } from "./types.ts";
-import { headTags, metaOf, page, routeOf } from "./views.ts";
+import { bindContact } from "./contact.ts";
+import { bindCarousel } from "./carousel.ts";
+import { SHELF_BATCH, headTags, metaOf, nav, page, routeOf, shelfOrder } from "./views.ts";
 
 const dataEl = document.getElementById("press-data");
 const root = document.getElementById("app");
@@ -14,11 +16,49 @@ if (dataEl && root) {
   const setMeta = (sel: string, attr: string, value: string) =>
     document.querySelector(sel)?.setAttribute(attr, value);
 
-  const show = (path: string, hop: boolean) => {
-    const route = routeOf(path, cat);
-    render(page(route, cat), root);
-    head(route, hop);
+  // How many shelf cards each page draws (the home page, each collection's). It only grows,
+  // and survives a hop, so coming back from a book finds the shelf as long as it was and the
+  // browser can restore the scroll.
+  const shown = new Map<string, number>();
+  let path = location.pathname;
+  const count = () => shown.get(path) ?? SHELF_BATCH;
+
+  // The shelf grows as the reader nears its end: the marker after the last card is watched,
+  // well before it is on screen, and each sighting adds a batch. No scroll listener runs.
+  const more = new IntersectionObserver(entries => {
+    const total = shelfOrder(routeOf(path, cat), cat).length;
+    if (!entries.some(e => e.isIntersecting) || count() >= total) return;
+    shown.set(path, Math.min(total, count() + SHELF_BATCH));
+    draw();
+  }, { rootMargin: "0px 0px 1200px 0px" });
+
+  const watch = () => {
+    bindCarousel(root);
+    more.disconnect();
+    const marker = root.querySelector(".shelf-more");
+    if (marker) more.observe(marker);
   };
+
+  const draw = () => {
+    render(page(routeOf(path, cat), cat, count()), root);
+    watch();
+  };
+
+  const show = (to: string, hop: boolean, hash = "") => {
+    path = to;
+    draw();
+    head(routeOf(to, cat), hop && !hash);
+    if (hash) document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView();
+  };
+
+  /** A hop, as a link press makes one: the collection menu uses it too. */
+  const go = (href: string) => {
+    const url = new URL(href, location.href);
+    if (url.pathname !== location.pathname || url.hash !== location.hash)
+      history.pushState(null, "", url.pathname + url.hash);
+    show(url.pathname, true, url.hash);
+  };
+  nav.go = go;
 
   /** The head and the focus follow the page: title, description, canonical, link preview. */
   const head = (route: Route, hop: boolean) => {
@@ -55,6 +95,7 @@ if (dataEl && root) {
   const first = routeOf(location.pathname, cat);
   hydrate(page(first, cat), root);
   head(first, false);
+  watch();
 
   document.addEventListener("click", e => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -64,9 +105,9 @@ if (dataEl && root) {
     if (url.origin !== location.origin || /\.[a-z0-9]+$/i.test(url.pathname)) return;
     if (url.hash && url.pathname === location.pathname) return;
     e.preventDefault();
-    if (url.pathname !== location.pathname) history.pushState(null, "", url.pathname);
-    show(url.pathname, true);
+    go(url.href);
   });
 
   window.addEventListener("popstate", () => show(location.pathname, false));
+  bindContact();
 }
