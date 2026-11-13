@@ -436,7 +436,7 @@ function missing(): TemplateResult {
  *  (src/contact.ts binds it). The honeypot is for bots, the challenge's slot fills on intent. */
 const contact = () => html`<article class="prose contact">
   <h1 tabindex="-1">Correspondence</h1>
-  <p>A question about a book, a correction, or a word for the editors. It reaches us by email.</p>
+  <p>A question about a book, a correction, or a word for the editors.</p>
   <form id="press-contact" action="https://contact-api.merecatholicity.com/" method="POST">
     <div class="contact-row">
       <label>Name<input type="text" name="name" maxlength="200" autocomplete="name"></label>
