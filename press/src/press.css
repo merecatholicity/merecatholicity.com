@@ -392,3 +392,7 @@ main > .filter:first-child { margin-top: 18px; }
     transition: none; transform: none; opacity: 1; }
   .featured.is-live .slide-wash { opacity: 0.7; }
 }
+
+/* About: the two pages on merecatholicity.com that state the case at length. */
+.further { padding-left: 1.2em; margin: 0 0 1.4em; }
+.further li { margin: 0 0 0.5em; }

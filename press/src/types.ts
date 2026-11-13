@@ -8,6 +8,8 @@ export interface Press {
   parent: { name: string; url: string };
   motto: { latin: string; english: string; source: string };
   about: string[];
+  /** The About page's second part: what the press is for, and where to read the case at length. */
+  hope: { heading: string; paragraphs: string[]; further: { label: string; url: string; note: string }[] };
   /** The press's own accounts (none yet): the footer's links and the JSON-LD sameAs. */
   social: { name: string; url: string }[];
   /** The titles the home page's carousel shows, in order, by slug. */
