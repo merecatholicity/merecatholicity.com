@@ -294,9 +294,12 @@ main > .filter:first-child { margin-top: 18px; }
 .shelf-more { height: 1px; margin: 0; }
 
 /* A title's page. */
-.back { margin: 28px 0 8px; font: 0.9rem var(--font-sans); display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+/* Two ways back, each its own button: a finger must never hit one meaning the other. */
+.back { margin: 28px 0 12px; font: 0.9rem var(--font-sans); display: flex; flex-wrap: wrap; gap: 10px; }
+.back a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border: 1px solid var(--rule);
+  border-radius: 999px; background: rgba(25, 28, 32, 0.6); text-decoration: none; }
 .back a { color: var(--muted); text-decoration: none; }
-.back a::before { content: "← "; }
+.back a::before { content: "←"; margin-right: 0.45em; }
 .back a:hover { color: var(--ink); }
 .book { display: grid; grid-template-columns: minmax(200px, 340px) 1fr; gap: 48px; margin-top: 20px; align-items: start; }
 .book-cover { position: sticky; top: 24px; }
