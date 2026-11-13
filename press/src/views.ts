@@ -416,6 +416,11 @@ function about(cat: Catalogue): TemplateResult {
         <p>${press.motto.english}</p>
         <footer>${press.motto.source}</footer>
       </blockquote>
+      <h2>${press.hope.heading}</h2>
+      ${press.hope.paragraphs.map(p => html`<p>${p}</p>`)}
+      <ul class="further">
+        ${press.hope.further.map(f => html`<li><a href=${f.url} rel="noopener">${f.label}</a>: ${f.note}.</li>`)}
+      </ul>
       <p><a href=${press.parent.url} rel="noopener">Visit ${press.parent.name}</a></p>
     </article>`;
 }
