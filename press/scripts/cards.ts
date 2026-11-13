@@ -41,7 +41,8 @@ export function cardMaker(root: string, press: Press) {
 
   return async (t: Title, coverJpg: Buffer): Promise<Buffer> => {
     // The cover's height fills the card less its margins; its width keeps the cover's ratio.
-    const ch = 530, cw = Math.round(ch * 800 / 1199);
+    const [w, h] = t.coverSize ?? [1000, 1510];
+    const ch = 530, cw = Math.round(ch * w / h);
     const titleSize = t.title.length > 40 ? 50 : t.title.length > 22 ? 58 : 68;
     const subSize = (t.subtitle?.length ?? 0) > 70 ? 26 : 30;
     const cover: Node = { type: "img", props: {
@@ -61,7 +62,8 @@ export function cardMaker(root: string, press: Press) {
       ...(t.subtitle ? [el("div", { fontFamily: "Gelasio", fontStyle: "italic", fontSize: subSize,
         lineHeight: 1.3, color: SOFT, marginTop: 18 }, t.subtitle)] : []),
       rule,
-      el("div", { fontFamily: "Gelasio", fontSize: 26, color: SOFT }, `${t.format}${t.kindle ? " and Kindle" : ""}`));
+      el("div", { fontFamily: "Gelasio", fontSize: 26, color: SOFT },
+        !t.amazon ? "Paperback and Kindle · Coming soon" : `${t.format}${t.kindle ? " and Kindle" : ""}`));
     const card = el("div", { width: CARD_W, height: CARD_H, display: "flex", alignItems: "center",
       padding: "0 72px 0 64px",
       backgroundColor: "#0f1113",

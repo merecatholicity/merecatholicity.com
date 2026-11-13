@@ -1055,8 +1055,13 @@ solved on the site hostname), and **never** `website` (honeypot → fake
 field validation → Turnstile → send via Cloudflare Email Routing to the
 verified `CONTACT_TO`. Responses: `200 {ok:true}` · `400` (bad request / empty
 message) · `403` (bad origin / Turnstile) · `405` (non-POST) · `429` · `502`
-(delivery failure). CORS is emitted for the two site origins; a missing Origin
-passes.
+(delivery failure). CORS is emitted for the allowed origins below; a missing
+Origin passes.
+
+The allowed origins are `merecatholicity.com`, `www.merecatholicity.com` and
+`press.merecatholicity.com` (Lérins Press's Correspondence page, 2026-11-12), and
+`TURNSTILE_HOSTNAMES` names the same three. A message from the press is subjected
+`press.merecatholicity.com: message from …`, every other `merecatholicity.com: …`.
 
 ---
 

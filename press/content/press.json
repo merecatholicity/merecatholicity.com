@@ -16,5 +16,189 @@
     "One of its monks, Vincent, wrote a short book in 434 for telling the faith of the Church from the novelties pressed on it. His rule is the one this house takes its name from. Hold to what has been believed everywhere, always, and by all.",
     "Lérins Press is the publishing arm of merecatholicity.com. It prints paperbacks of the books written there, and in time careful editions of the classics the site already keeps free to read online."
   ],
-  "social": []
+  "social": [],
+  "featured": [
+    "newman-apologia",
+    "newman-idea",
+    "newman-development",
+    "newman-gerontius",
+    "newman-grammar"
+  ],
+  "originals": {
+    "slug": "miscellaneous",
+    "name": "Miscellaneous",
+    "short": "Miscellaneous",
+    "tagline": "Other books from Lérins Press",
+    "accent": "#8b1a1a",
+    "about": [
+      "Books from Lérins Press that stand in none of its collections."
+    ],
+    "parts": []
+  },
+  "collections": [
+    {
+      "slug": "lerins-newman",
+      "name": "Lérins Newman",
+      "short": "Newman",
+      "tagline": "The works of John Henry Newman, Anglican and Catholic",
+      "accent": "#7a1f2b",
+      "about": [
+        "John Henry Newman (1801 to 1890) lived forty-four years in the Church of England and forty-five in the Catholic Church, and wrote through both. At Oxford he led the movement that called the Church of England back to the Fathers. Reading them, he came to believe that their Church was the Church of Rome, and in 1845 he was received into it. He died a cardinal, and was canonized in 2019.",
+        "He argued with Vincent of Lérins all his life: how the faith held everywhere, always and by all can grow without becoming something else. Lérins Newman prints his works in three parts, the Anglican years, the Catholic years, and the essays, sketches and verse he gathered late in life, numbered in that order, so each book shows where it stands in one life."
+      ],
+      "parts": [
+        {
+          "slug": "anglican",
+          "name": "The Anglican years, 1826–1845"
+        },
+        {
+          "slug": "catholic",
+          "name": "The Catholic years, 1848–1885"
+        },
+        {
+          "slug": "collected",
+          "name": "Collected essays, sketches, and verse"
+        }
+      ]
+    },
+    {
+      "slug": "lerins-creeds",
+      "name": "Lérins Creeds",
+      "short": "Creeds",
+      "tagline": "What each communion confesses, in its own words",
+      "accent": "#23395b",
+      "about": [
+        "What each communion actually confesses, in its own words: the ecumenical symbols, the Roman and Eastern standards, and the Protestant confessions, the originals beside their English.",
+        "Lérins Creeds prints them to be read side by side: Philip Schaff's Creeds of Christendom in its three volumes, the decrees of Trent, the Thirty-Nine Articles, the Book of Concord and the Westminster standards."
+      ],
+      "parts": []
+    },
+    {
+      "slug": "lerins-fathers",
+      "name": "Lérins Fathers",
+      "short": "Fathers",
+      "tagline": "The Fathers of the Church, one work at a time",
+      "accent": "#2f5a3a",
+      "about": [
+        "The Fathers are the Church's first teachers after the apostles: the bishops, martyrs and monks who received the faith, defended it and handed it on. Vincent of Lérins, whose island gives this press its name, held that what they taught together, everywhere and always, is the faith itself.",
+        "Lérins Fathers prints their works one at a time, from Clement and Ignatius to John of Damascus, each in its own edition with an introduction, notes and a glossary."
+      ],
+      "parts": []
+    },
+    {
+      "slug": "lerins-histories",
+      "name": "Lérins Histories",
+      "short": "Histories",
+      "tagline": "Philip Schaff's History of the Christian Church",
+      "accent": "#44505c",
+      "about": [
+        "Philip Schaff's History of the Christian Church, in eight volumes from the apostles to the Reformation, is the standard English narrative behind the primary sources of this press. Schaff, a Swiss-born Reformed historian in America, wrote it as a Protestant who loved the Fathers and read the Church whole.",
+        "Lérins Histories prints it volume by volume, in Schaff's own order."
+      ],
+      "parts": []
+    },
+    {
+      "slug": "lerins-antiquities",
+      "name": "Lérins Antiquities",
+      "short": "Antiquities",
+      "tagline": "The Second Temple, the world of the New Testament",
+      "accent": "#2e5e63",
+      "about": [
+        "The Judaism our Lord and His apostles lived in, heard in its own voice. Josephus is the outside witness to Christ, to John the Baptist, to James the brother of the Lord, and to the fall of Jerusalem he watched with his own eyes. Philo of Alexandria carries the Logos vocabulary and the allegorical reading the Fathers inherited.",
+        "The Book of Enoch, quoted in the Epistle of Jude, opens with Jubilees and the Testaments the apocalyptic world the Gospels speak into. Lérins Antiquities prints them in three parts: Josephus, Philo, and the apocalyptic books."
+      ],
+      "parts": [
+        {
+          "slug": "josephus",
+          "name": "Josephus"
+        },
+        {
+          "slug": "philo",
+          "name": "Philo of Alexandria"
+        },
+        {
+          "slug": "apocalyptic",
+          "name": "The apocalyptic books"
+        }
+      ]
+    },
+    {
+      "slug": "lerins-empire",
+      "name": "Lérins Empire",
+      "short": "Empire",
+      "tagline": "The Roman Empire, the world of the early Church",
+      "accent": "#5c3a24",
+      "about": [
+        "The historians of the empire the Church was born into and outlived: Tacitus and Suetonius, Dio, Ammianus, and Zosimus, the last pagan to blame the Christians for Rome's fall.",
+        "Then Gibbon entire, in J. B. Bury's edition, whose notes correct the text with a century of scholarship, and Bury's own history of the later empire. Lérins Empire prints them in two parts, the imperial historians and the modern."
+      ],
+      "parts": [
+        {
+          "slug": "imperial",
+          "name": "The imperial historians"
+        },
+        {
+          "slug": "modern",
+          "name": "Bury, and Gibbon in Bury’s edition"
+        }
+      ]
+    },
+    {
+      "slug": "lerins-classics",
+      "name": "Lérins Classics",
+      "short": "Classics",
+      "tagline": "The classical inheritance of Christendom",
+      "accent": "#8b4a32",
+      "about": [
+        "The classical inheritance of Christendom: the poets and historians of Greece and Rome, the philosophers the Fathers argued with and learned from, the last voices of the old religion, and the older faith of the peoples who became Christendom, from the Vedas to the Eddas. The Church did not convert an empty world, but this one.",
+        "Justin Martyr, a philosopher before he was a Christian, taught that the Word had sown seeds of truth in every people, and Augustine told the Church to take back whatever the pagans had said truly, as Israel carried the gold of Egypt out with it. Lérins Classics prints those books in five parts, from Homer to Boethius."
+      ],
+      "parts": [
+        {
+          "slug": "greek",
+          "name": "The Greek foundations"
+        },
+        {
+          "slug": "roman",
+          "name": "The Roman republic and empire"
+        },
+        {
+          "slug": "philosophers",
+          "name": "The philosophers, and the religion of Rome"
+        },
+        {
+          "slug": "collision",
+          "name": "The old religion and the new faith"
+        },
+        {
+          "slug": "indoeuropean",
+          "name": "The Indo-European inheritance"
+        }
+      ]
+    },
+    {
+      "slug": "lerins-reformers",
+      "name": "Lérins Reformers",
+      "short": "Reformers",
+      "tagline": "The Reformation heard in its own voice",
+      "accent": "#3d5229",
+      "about": [
+        "The Reformation heard in its own voice: Luther in his chief works, Calvin's Institutes, John Jewel's Apology of the Church of England, and Richard Hooker's Laws of Ecclesiastical Polity.",
+        "Each of them claimed the old paths, the Scriptures and the Fathers, against the Church of his day. Lérins Reformers prints them to be set beside Trent and the Summa, so the reader may judge."
+      ],
+      "parts": []
+    },
+    {
+      "slug": "lerins-chesterton",
+      "name": "Lérins Chesterton",
+      "short": "Chesterton",
+      "tagline": "G. K. Chesterton's case for the faith, made to the common reader",
+      "accent": "#6a5a8a",
+      "about": [
+        "G. K. Chesterton made the case for the creed to the common reader in three books: Heretics (1905), Orthodoxy (1908) and The Everlasting Man (1925).",
+        "Lérins Chesterton prints them for the reader they were written for."
+      ],
+      "parts": []
+    }
+  ]
 }

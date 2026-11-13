@@ -19,12 +19,16 @@ interface Env {
   EMAIL: { send(msg: unknown): Promise<void> };
 }
 
-const DEFAULT_ORIGINS = ['https://merecatholicity.com', 'https://www.merecatholicity.com'];
+/* Lérins Press (press/) posts its Correspondence page here too (2026-11-12). */
+const DEFAULT_ORIGINS = ['https://merecatholicity.com', 'https://www.merecatholicity.com', 'https://press.merecatholicity.com'];
 const DEFAULT_FROM = { email: 'contact-form@merecatholicity.com', name: 'merecatholicity.com contact form' };
 
 function allowedOrigins(env: Env): string[] {
   const v = env && env.ALLOWED_ORIGINS;
   return v ? String(v).split(',').map((s) => s.trim()).filter(Boolean) : DEFAULT_ORIGINS;
+}
+function siteOf(origin: string | null): string {
+  return origin === 'https://press.merecatholicity.com' ? 'press.merecatholicity.com' : 'merecatholicity.com';
 }
 function fromAddress(env: Env) {
   return { email: (env && env.CONTACT_FROM) || DEFAULT_FROM.email, name: DEFAULT_FROM.name };
@@ -127,7 +131,9 @@ async function handle(request: Request, env: Env): Promise<Response> {
   } = {
     to: to,
     from: fromAddress(env),
-    subject: 'merecatholicity.com: message from ' + (name || 'anonymous'),
+    /* The site the message came from, so a press reader's note reads as the press's. The
+       origin is already on the allow-list above. */
+    subject: siteOf(origin) + ': message from ' + (name || 'anonymous'),
     text:
       'Name: ' + (name || '(none given)') + '\n' +
       'Email: ' + (email || '(none given)') + '\n\n' +

@@ -4,7 +4,11 @@
 #   make run      build, then serve dist/ at http://127.0.0.1:$(PORT)/ and rebuild on a save
 #   make build    build dist/ (PRESS_URL=... to build for another origin)
 #   make check    type-check src/ and scripts/
-#   make covers   make each cover's .jpg (feeds, link previews) from its .avif
+#   make cover SRC=<front image> NAME=<slug>
+#                 a title's cover files from its front: WebP at 1000 and 480 wide (the
+#                 page and the shelf) and an 800-wide .jpg (feeds, link previews)
+#   make placeholders  draw a "Cover coming soon" front for each collection whose books have no
+#                 cover yet (scripts/placeholders.ts), in the same three files
 #   make brand    cut the shield out of the logo and make the icons and the preview image
 #   make deploy   build, then deploy dist/ to press.merecatholicity.com. CI's road
 #                 (.github/workflows/press.yml): needs CLOUDFLARE_API_TOKEN.
@@ -13,7 +17,7 @@
 PORT ?= 8090
 export PORT
 
-.PHONY: run build check covers brand deploy dry-run clean
+.PHONY: run build check cover placeholders brand deploy dry-run clean
 
 node_modules/.package-lock.json: package.json package-lock.json
 	npm ci --no-audit --no-fund
@@ -34,10 +38,17 @@ deploy: build
 dry-run: build
 	npx wrangler deploy --dry-run
 
-covers:
-	@for f in content/covers/*.avif; do \
-	  j="$${f%.avif}.jpg"; \
-	  [ "$$j" -nt "$$f" ] || { magick "$$f" -strip -resize 800x -quality 85 "$$j" && echo "made $$j"; }; \
+# The picture is never altered: only scaled and encoded. No crop, no retouch.
+cover:
+	@test -n "$(SRC)" -a -n "$(NAME)" || { echo "usage: make cover SRC=<front image> NAME=<slug>"; exit 1; }
+	magick "$(SRC)" -strip -resize 1000x -quality 80 -define webp:method=6 content/covers/$(NAME).webp
+	magick "$(SRC)" -strip -resize 480x -quality 78 -define webp:method=6 content/covers/$(NAME)-480.webp
+	magick "$(SRC)" -strip -resize 800x -quality 85 content/covers/$(NAME).jpg
+
+placeholders: node_modules/.package-lock.json
+	node scripts/placeholders.ts
+	@for p in content/covers/soon-*.png; do \
+	  $(MAKE) -s cover SRC="$$p" NAME="$$(basename "$$p" .png)" && rm "$$p"; \
 	done
 
 # The owner's logo (content/brand/lerins-press-logo.jpg) is the source of every brand image.
