@@ -27,9 +27,12 @@
   --accent-2: #f2827c;
   --gold: #cba36a;
   /* The buy buttons take the site's dark-theme green (its --grade-y) and gold (its
-     --brown), never the red accent: red reads as danger on a button. */
+     --brown), never the red accent: red reads as danger on a button. The hardcover's is a
+     cloth-binding blue between them, as light as the green and the gold on the charcoal. */
   --buy: #6cc47a;
   --buy-on: #0e2414;
+  --hard: #82aee0;
+  --hard-on: #0c1a2b;
   --kindle: #cba36a;
   --kindle-on: #2b1f0b;
   /* "Coming soon": the charcoal theme's red fill (--accent-fill and --accent-on there). It is
@@ -152,7 +155,7 @@ p { overflow-wrap: break-word; }
 .card-sub { font-size: 0.9rem; line-height: 1.4; color: var(--muted-c); }
 .card-author { font: 0.8rem var(--font-sans); color: var(--faint); letter-spacing: 0.05em; text-transform: uppercase; margin-top: 2px; }
 
-/* Buttons: the paperback green and the Kindle gold. */
+/* Buttons: the paperback green, the hardcover blue and the Kindle gold. */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; text-align: center;
   padding: 10px 18px; border-radius: 999px; border: 1px solid transparent;
@@ -160,6 +163,7 @@ p { overflow-wrap: break-word; }
 }
 .btn:hover { filter: brightness(1.08); }
 .btn-paper, .btn-paper:hover { background: var(--buy); border-color: var(--buy); color: var(--buy-on); }
+.btn-hard, .btn-hard:hover { background: var(--hard); border-color: var(--hard); color: var(--hard-on); }
 .btn-kindle, .btn-kindle:hover { background: var(--kindle); border-color: var(--kindle); color: var(--kindle-on); }
 .btn-small { padding: 7px 14px; font-size: 0.85rem; }
 .card-buy { margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }

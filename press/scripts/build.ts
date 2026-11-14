@@ -95,7 +95,7 @@ const cardsSource = readFileSync(join(ROOT, "scripts/cards.ts"));
 for (const t of titles) {
   const coverJpg = readFileSync(join(ROOT, "content/covers", `${t.cover}.jpg`));
   const key = hash(Buffer.concat([cardsSource, coverJpg, Buffer.from(JSON.stringify(
-    [press.name, t.title, t.subtitle, t.format, t.amazon, t.kindle, t.coverSize]))]));
+    [press.name, t.title, t.subtitle, t.format, t.amazon, t.hardcover, t.kindle, t.coverSize]))]));
   const cached = join(CACHE, `${key}.jpg`);
   let jpg: Buffer;
   try { jpg = readFileSync(cached); }

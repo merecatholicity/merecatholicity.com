@@ -49,6 +49,8 @@ export interface Title {
   listed: string;
   /** The paperback's Amazon page. A title without one is not out yet: it shows "Coming soon". */
   amazon?: string;
+  /** The hardcover's Amazon page, where there is one. */
+  hardcover?: string;
   /** The Kindle edition's Amazon page, where there is one. */
   kindle?: string;
   /** Basename under covers/: an .avif for the page and a .jpg for feeds and link previews. */
@@ -79,3 +81,9 @@ export type Route =
   | { kind: "collection"; collection: Collection }
   | { kind: "title"; title: Title }
   | { kind: "missing" };
+
+/** "Paperback, Hardcover and Kindle": the editions out, as the head of a title's page says them. */
+export const editions = (t: Title) => {
+  const all = [t.format, ...(t.hardcover ? ["Hardcover"] : []), ...(t.kindle ? ["Kindle"] : [])];
+  return all.length > 1 ? `${all.slice(0, -1).join(", ")} and ${all[all.length - 1]}` : all[0];
+};

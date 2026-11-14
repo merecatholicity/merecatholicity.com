@@ -42,13 +42,7 @@
     ]
   },
   "social": [],
-  "featured": [
-    "newman-apologia",
-    "newman-idea",
-    "newman-development",
-    "newman-gerontius",
-    "newman-grammar"
-  ],
+  "featured": ["newman-oxford-sermons", "machines-of-borrowed-grace", "mere-catholicity"],
   "originals": {
     "slug": "miscellaneous",
     "name": "Miscellaneous",
