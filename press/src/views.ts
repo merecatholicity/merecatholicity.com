@@ -201,21 +201,22 @@ const cover = (t: Title, sizes: string, eager = false) => {
 </picture>`;
 };
 
+/** A title not out yet: one pill in the charcoal theme's red, and no link. */
+const soon = (short = false) => html`<span class=${short ? "soon soon-small" : "soon"}>Coming soon</span>`;
+
+/** The paperback's button, the green. */
+const paperback = (t: Title) => html`<a class="btn btn-paper" href=${t.amazon} rel="noopener"
+  target="_blank"><span>Paperback on Amazon<span class="sr"> of ${t.title}</span></span></a>`;
+
 /** The buy buttons, in the order the press would sell them: green for the paperback, blue for
- *  the hardcover, gold for the Kindle edition. A title not out yet
- *  has one pill in their place, in the charcoal theme's red, and no link. */
-const buy = (t: Title, short = false) => !t.amazon
-  ? html`<span class=${short ? "soon soon-small" : "soon"}>Coming soon</span>`
-  : html`
-  <a class=${short ? "btn btn-paper btn-small" : "btn btn-paper"} href=${t.amazon} rel="noopener"
-    target="_blank"><span>${short ? "Paperback" : "Paperback on Amazon"}<span
-    class="sr"> of ${t.title}${short ? " on Amazon" : ""}</span></span></a>
-  ${t.hardcover ? html`<a class=${short ? "btn btn-hard btn-small" : "btn btn-hard"} href=${t.hardcover}
-    rel="noopener" target="_blank"><span>${short ? "Hardcover" : "Hardcover on Amazon"}<span
-    class="sr"> of ${t.title}${short ? " on Amazon" : ""}</span></span></a>` : nothing}
-  ${t.kindle ? html`<a class=${short ? "btn btn-kindle btn-small" : "btn btn-kindle"} href=${t.kindle}
-    rel="noopener" target="_blank"><span>${short ? "Kindle" : "Kindle on Amazon"}<span
-    class="sr"> edition of ${t.title}${short ? " on Amazon" : ""}</span></span></a>` : nothing}`;
+ *  the hardcover, gold for the Kindle edition. All three stand on the title's own page only, the
+ *  featured reads carry the paperback alone, and the shelves none (owner, 2026-11-13). */
+const buy = (t: Title) => !t.amazon ? soon() : html`
+  ${paperback(t)}
+  ${t.hardcover ? html`<a class="btn btn-hard" href=${t.hardcover} rel="noopener" target="_blank"><span>Hardcover
+    on Amazon<span class="sr"> of ${t.title}</span></span></a>` : nothing}
+  ${t.kindle ? html`<a class="btn btn-kindle" href=${t.kindle} rel="noopener" target="_blank"><span>Kindle on
+    Amazon<span class="sr"> edition of ${t.title}</span></span></a>` : nothing}`;
 
 const card = (t: Title, i: number) => html`<li class="card">
   <a class="card-link" href="/titles/${t.slug}/">
@@ -225,7 +226,7 @@ const card = (t: Title, i: number) => html`<li class="card">
     ${t.subtitle ? html`<span class="card-sub">${t.subtitle}</span>` : nothing}
     ${t.author ? html`<span class="card-author">${t.author}</span>` : nothing}
   </a>
-  <p class="card-buy">${buy(t, true)}</p>
+  ${t.amazon ? nothing : html`<p class="card-buy">${soon(true)}</p>`}
 </li>`;
 
 type Placed = { t: Title; i: number };
@@ -299,7 +300,7 @@ function featured(cat: Catalogue): TemplateResult {
             ${t.subtitle ? html`<p class="slide-sub">${t.subtitle}</p>` : nothing}
             ${t.author ? html`<p class="slide-author">${t.author}</p>` : nothing}
             ${t.lead[0] ? html`<p class="slide-lead">${t.lead[0]}</p>` : nothing}
-            <p class="slide-actions">${buy(t)}<a class="slide-more" href=${href}>About this book</a></p>
+            <p class="slide-actions">${t.amazon ? paperback(t) : soon()}<a class="slide-more" href=${href}>About this book</a></p>
           </div>
         </article>`;
       })}

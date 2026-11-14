@@ -165,7 +165,6 @@ p { overflow-wrap: break-word; }
 .btn-paper, .btn-paper:hover { background: var(--buy); border-color: var(--buy); color: var(--buy-on); }
 .btn-hard, .btn-hard:hover { background: var(--hard); border-color: var(--hard); color: var(--hard-on); }
 .btn-kindle, .btn-kindle:hover { background: var(--kindle); border-color: var(--kindle); color: var(--kindle-on); }
-.btn-small { padding: 7px 14px; font-size: 0.85rem; }
 .card-buy { margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .soon {
   display: inline-flex; align-items: center; padding: 10px 18px; border-radius: 999px;
@@ -390,7 +389,7 @@ main > .filter:first-child { margin-top: 18px; }
   /* A long head ("Lérins Newman Collection") keeps one line and its rules on a phone. */
   .rule-head { font-size: 0.95rem; letter-spacing: 0.1em; gap: 12px; text-align: center; }
   .shelf { gap: 32px 16px; }
-  .card-buy .btn-small, .card-buy .soon-small { flex: 1 1 auto; justify-content: center; }
+  .card-buy .soon-small { flex: 1 1 auto; justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) {
   .cover img { transition: none; }
