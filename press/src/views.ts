@@ -2,7 +2,7 @@
 // server (@lit-labs/ssr), and the browser renders the same templates when it navigates,
 // so the first paint and every later one come from one source.
 import { html, nothing, type TemplateResult } from "lit";
-import type { Catalogue, Collection, Route, Title } from "./types.ts";
+import { editions, type Catalogue, type Collection, type Route, type Title } from "./types.ts";
 
 /** The shelf draws this many cards at first, and this many more each time the reader nears
  *  its end (app.ts watches for that), so a long catalogue costs a phone only what it shows. */
@@ -173,8 +173,9 @@ export function jsonLd(route: Route, cat: Catalogue): object {
       image: abs(`/covers/${t.cover}.jpg`), inLanguage: "en",
       ...(t.description.length ? { description: t.description.join(" ") } : {}),
       ...(t.amazon ? {
-        workExample: [edition("Paperback", t.amazon), ...(t.kindle ? [edition("EBook", t.kindle)] : [])],
-        sameAs: [t.amazon, ...(t.kindle && t.kindle !== t.amazon ? [t.kindle] : [])],
+        workExample: [edition("Paperback", t.amazon), ...(t.hardcover ? [edition("Hardcover", t.hardcover)] : []),
+          ...(t.kindle ? [edition("EBook", t.kindle)] : [])],
+        sameAs: [t.amazon, ...[t.hardcover, t.kindle].filter((u): u is string => !!u && u !== t.amazon)],
       } : {}),
     }],
   };
@@ -200,7 +201,8 @@ const cover = (t: Title, sizes: string, eager = false) => {
 </picture>`;
 };
 
-/** The buy buttons: green for the paperback, gold for the Kindle edition. A title not out yet
+/** The buy buttons, in the order the press would sell them: green for the paperback, blue for
+ *  the hardcover, gold for the Kindle edition. A title not out yet
  *  has one pill in their place, in the charcoal theme's red, and no link. */
 const buy = (t: Title, short = false) => !t.amazon
   ? html`<span class=${short ? "soon soon-small" : "soon"}>Coming soon</span>`
@@ -208,6 +210,9 @@ const buy = (t: Title, short = false) => !t.amazon
   <a class=${short ? "btn btn-paper btn-small" : "btn btn-paper"} href=${t.amazon} rel="noopener"
     target="_blank"><span>${short ? "Paperback" : "Paperback on Amazon"}<span
     class="sr"> of ${t.title}${short ? " on Amazon" : ""}</span></span></a>
+  ${t.hardcover ? html`<a class=${short ? "btn btn-hard btn-small" : "btn btn-hard"} href=${t.hardcover}
+    rel="noopener" target="_blank"><span>${short ? "Hardcover" : "Hardcover on Amazon"}<span
+    class="sr"> of ${t.title}${short ? " on Amazon" : ""}</span></span></a>` : nothing}
   ${t.kindle ? html`<a class=${short ? "btn btn-kindle btn-small" : "btn btn-kindle"} href=${t.kindle}
     rel="noopener" target="_blank"><span>${short ? "Kindle" : "Kindle on Amazon"}<span
     class="sr"> edition of ${t.title}${short ? " on Amazon" : ""}</span></span></a>` : nothing}`;
@@ -390,7 +395,7 @@ function titlePage(t: Title, cat: Catalogue): TemplateResult {
           partName(t, cat) ? html`<span> · ${partName(t, cat)}</span>` : nothing}</p>` : nothing}
         <h1 tabindex="-1">${t.title}</h1>
         ${t.subtitle ? html`<p class="book-sub">${t.subtitle}</p>` : nothing}
-        <p class="book-by">${t.author ? `${t.author} · ` : ""}${!t.amazon ? "Paperback and Kindle" : t.kindle ? `${t.format} and Kindle` : t.format}</p>
+        <p class="book-by">${t.author ? `${t.author} · ` : ""}${!t.amazon ? "Paperback and Kindle" : editions(t)}</p>
         ${!t.lead.length || t.description[0]?.startsWith(t.lead[0]) ? nothing
           : html`<div class="book-lead">${t.lead.map(p => html`<p>${p}</p>`)}</div>`}
         <p class="actions">

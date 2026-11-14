@@ -44,6 +44,9 @@
     "author": "John Henry Newman",
     "format": "Paperback",
     "listed": "2026-11-12",
+    "amazon": "https://www.amazon.com/dp/B0HRM4XF5G",
+    "hardcover": "https://www.amazon.com/dp/B0HRMM3HC7",
+    "kindle": "https://www.amazon.com/dp/B0HRLWRZTD",
     "cover": "newman-oxford-sermons",
     "collection": {
       "slug": "lerins-newman",
