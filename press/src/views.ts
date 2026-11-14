@@ -295,7 +295,8 @@ function featured(cat: Catalogue): TemplateResult {
           <a class="slide-cover" href=${href} tabindex="-1" aria-hidden="true">
             ${cover(t, "(max-width: 720px) 56vw, 300px", i === 0)}</a>
           <div class="slide-text">
-            <p class="slide-kicker">${c ? seriesLine(t, cat) : t.amazon ? "Now in paperback and Kindle" : "Lérins Press"}</p>
+            <p class="slide-kicker">${[c ? seriesLine(t, cat) : "", t.amazon ? "Now available" : c ? "" : "Lérins Press"]
+              .filter(Boolean).join(" · ")}</p>
             <h3 class="slide-title"><a href=${href}>${t.title}</a></h3>
             ${t.subtitle ? html`<p class="slide-sub">${t.subtitle}</p>` : nothing}
             ${t.author ? html`<p class="slide-author">${t.author}</p>` : nothing}
