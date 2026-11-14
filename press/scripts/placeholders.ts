@@ -38,7 +38,7 @@ const press = JSON.parse(readFileSync(join(ROOT, "content/press.json"), "utf8"))
 const titles = JSON.parse(readFileSync(join(ROOT, "content/titles.json"), "utf8")) as { cover: string }[];
 const wanted = new Set(titles.map(t => t.cover).filter(c => c.startsWith("soon-")));
 
-for (const c of press.collections) {
+for (const c of [...press.collections, press.originals]) {
   const name = `soon-${c.slug}`;
   if (!wanted.has(name)) continue;
   // The two gold rules are boxes pinned by their edges: flex sizing lets a border run off the page.
