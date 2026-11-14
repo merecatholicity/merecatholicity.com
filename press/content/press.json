@@ -20,7 +20,7 @@
     "paragraphs": [
       "Lérins Press is an ecumenical publishing project, and an eclectic one. It is the publishing arm of merecatholicity.com, an app and a community of Christians who pray and work for the reunion of Christendom: the Roman Catholic Church, the Eastern Orthodox, the Assyrian and Oriental Orthodox churches, the Anglicans, the Lutherans, the Presbyterians and the rest. We put Vincent's test to the divided Church of our own day.",
       "It still finds an answer. For the first thousand years, before East and West split in 1054 and long before the Reformation, Christians read the same Bible, said the same Nicene Creed and kept the same seven great councils, and every one of these churches holds them still. That is ground enough to stand on together. What any one church has added since can wait until the whole Church comes to agree on it. This is a conservative ecumenism: the moral consensus of the Fathers is kept entire, and no new church is founded.",
-      "That is why the shelves look as they do. Calvin stands beside Newman, the Westminster Confession beside John of Damascus, Luther beside Augustine, each church's classics in its own words. They are the best introduction one Christian can give another to what the others believe, and the first step toward talking as brothers again.",
+      "That is why the shelves look as they do. The Fathers, whom every church claims, stand beside Newman, who read them, and beside the masters of prayer, East and West, while Chesterton and MacDonald make the case for the faith to the common reader in essay, story and verse. They are the best introduction one Christian can give another to what the others believe, and the first step toward talking as brothers again.",
       "We sell high-quality paperbacks to support our mission. Each is a classic from the library at merecatholicity.com, newly typeset, with a new introduction and notes, made to last on the shelf. The library itself stays free to read online. Buying a Lérins Press book is the best way to support the work."
     ],
     "further": [
@@ -42,7 +42,11 @@
     ]
   },
   "social": [],
-  "featured": ["newman-oxford-sermons", "machines-of-borrowed-grace", "mere-catholicity"],
+  "featured": [
+    "newman-oxford-sermons",
+    "machines-of-borrowed-grace",
+    "mere-catholicity"
+  ],
   "originals": {
     "slug": "miscellaneous",
     "name": "Miscellaneous",
@@ -81,14 +85,26 @@
       ]
     },
     {
-      "slug": "lerins-creeds",
-      "name": "Lérins Creeds",
-      "short": "Creeds",
-      "tagline": "What each communion confesses, in its own words",
-      "accent": "#23395b",
+      "slug": "lerins-chesterton",
+      "name": "Lérins Chesterton",
+      "short": "Chesterton",
+      "tagline": "The chief works of G. K. Chesterton, in the order he wrote them",
+      "accent": "#6a5a8a",
       "about": [
-        "What each communion actually confesses, in its own words: the ecumenical symbols, the Roman and Eastern standards, and the Protestant confessions, the originals beside their English.",
-        "Lérins Creeds prints them to be read side by side: Philip Schaff's Creeds of Christendom in its three volumes, the decrees of Trent, the Thirty-Nine Articles, the Book of Concord and the Westminster standards."
+        "G. K. Chesterton (1874 to 1936) was a journalist, poet, novelist and critic, the author of Orthodoxy and The Everlasting Man and of the Father Brown stories. He was received into the Catholic Church in 1922.",
+        "Lérins Chesterton prints his chief books in the order he published them: the apologetics, Father Brown, the novels and the verse, and the social and historical books."
+      ],
+      "parts": []
+    },
+    {
+      "slug": "lerins-macdonald",
+      "name": "Lérins MacDonald",
+      "short": "MacDonald",
+      "tagline": "The chief works of George MacDonald, in the order he wrote them",
+      "accent": "#2a5d6b",
+      "about": [
+        "George MacDonald (1824 to 1905), a Scottish Congregational minister who left the pulpit for the pen, wrote fairy tales and fantasies, novels of Scottish life, poems and three series of Unspoken Sermons. C. S. Lewis named him his master, and G. K. Chesterton counted him among the great writers of his age.",
+        "Lérins MacDonald prints his chief books in the order he published them, from Phantastes to Lilith: the fantasies, the fairy tales, the sermons and the verse."
       ],
       "parts": []
     },
@@ -100,122 +116,19 @@
       "accent": "#2f5a3a",
       "about": [
         "The Fathers are the Church's first teachers after the apostles: the bishops, martyrs and monks who received the faith, defended it and handed it on. Vincent of Lérins, whose island gives this press its name, held that what they taught together, everywhere and always, is the faith itself.",
-        "Lérins Fathers prints their works one at a time, from Clement and Ignatius to John of Damascus, each in its own edition with an introduction, notes and a glossary."
+        "Lérins Fathers prints their works one at a time, from the Didache and Ignatius to John of Damascus, with the monks of the desert and the first historian of the Church among them, and after them the Golden Chain, the Gospels expounded in the Fathers' own words."
       ],
       "parts": []
     },
     {
-      "slug": "lerins-histories",
-      "name": "Lérins Histories",
-      "short": "Histories",
-      "tagline": "Philip Schaff's History of the Christian Church",
-      "accent": "#44505c",
+      "slug": "lerins-devotions",
+      "name": "Lérins Devotions",
+      "short": "Devotions",
+      "tagline": "The great books of the devotional life",
+      "accent": "#8a3b5c",
       "about": [
-        "Philip Schaff's History of the Christian Church, in eight volumes from the apostles to the Reformation, is the standard English narrative behind the primary sources of this press. Schaff, a Swiss-born Reformed historian in America, wrote it as a Protestant who loved the Fathers and read the Church whole.",
-        "Lérins Histories prints it volume by volume, in Schaff's own order."
-      ],
-      "parts": []
-    },
-    {
-      "slug": "lerins-antiquities",
-      "name": "Lérins Antiquities",
-      "short": "Antiquities",
-      "tagline": "The Second Temple, the world of the New Testament",
-      "accent": "#2e5e63",
-      "about": [
-        "The Judaism our Lord and His apostles lived in, heard in its own voice. Josephus is the outside witness to Christ, to John the Baptist, to James the brother of the Lord, and to the fall of Jerusalem he watched with his own eyes. Philo of Alexandria carries the Logos vocabulary and the allegorical reading the Fathers inherited.",
-        "The Book of Enoch, quoted in the Epistle of Jude, opens with Jubilees and the Testaments the apocalyptic world the Gospels speak into. Lérins Antiquities prints them in three parts: Josephus, Philo, and the apocalyptic books."
-      ],
-      "parts": [
-        {
-          "slug": "josephus",
-          "name": "Josephus"
-        },
-        {
-          "slug": "philo",
-          "name": "Philo of Alexandria"
-        },
-        {
-          "slug": "apocalyptic",
-          "name": "The apocalyptic books"
-        }
-      ]
-    },
-    {
-      "slug": "lerins-empire",
-      "name": "Lérins Empire",
-      "short": "Empire",
-      "tagline": "The Roman Empire, the world of the early Church",
-      "accent": "#5c3a24",
-      "about": [
-        "The historians of the empire the Church was born into and outlived: Tacitus and Suetonius, Dio, Ammianus, and Zosimus, the last pagan to blame the Christians for Rome's fall.",
-        "Then Gibbon entire, in J. B. Bury's edition, whose notes correct the text with a century of scholarship, and Bury's own history of the later empire. Lérins Empire prints them in two parts, the imperial historians and the modern."
-      ],
-      "parts": [
-        {
-          "slug": "imperial",
-          "name": "The imperial historians"
-        },
-        {
-          "slug": "modern",
-          "name": "Bury, and Gibbon in Bury’s edition"
-        }
-      ]
-    },
-    {
-      "slug": "lerins-classics",
-      "name": "Lérins Classics",
-      "short": "Classics",
-      "tagline": "The classical inheritance of Christendom",
-      "accent": "#8b4a32",
-      "about": [
-        "The classical inheritance of Christendom: the poets and historians of Greece and Rome, the philosophers the Fathers argued with and learned from, the last voices of the old religion, and the older faith of the peoples who became Christendom, from the Vedas to the Eddas. The Church did not convert an empty world, but this one.",
-        "Justin Martyr, a philosopher before he was a Christian, taught that the Word had sown seeds of truth in every people, and Augustine told the Church to take back whatever the pagans had said truly, as Israel carried the gold of Egypt out with it. Lérins Classics prints those books in five parts, from Homer to Boethius."
-      ],
-      "parts": [
-        {
-          "slug": "greek",
-          "name": "The Greek foundations"
-        },
-        {
-          "slug": "roman",
-          "name": "The Roman republic and empire"
-        },
-        {
-          "slug": "philosophers",
-          "name": "The philosophers, and the religion of Rome"
-        },
-        {
-          "slug": "collision",
-          "name": "The old religion and the new faith"
-        },
-        {
-          "slug": "indoeuropean",
-          "name": "The Indo-European inheritance"
-        }
-      ]
-    },
-    {
-      "slug": "lerins-reformers",
-      "name": "Lérins Reformers",
-      "short": "Reformers",
-      "tagline": "The Reformation heard in its own voice",
-      "accent": "#3d5229",
-      "about": [
-        "The Reformation heard in its own voice: Luther in his chief works, Calvin's Institutes, John Jewel's Apology of the Church of England, and Richard Hooker's Laws of Ecclesiastical Polity.",
-        "Each of them claimed the old paths, the Scriptures and the Fathers, against the Church of his day. Lérins Reformers prints them in their own words, so the reader may judge."
-      ],
-      "parts": []
-    },
-    {
-      "slug": "lerins-chesterton",
-      "name": "Lérins Chesterton",
-      "short": "Chesterton",
-      "tagline": "G. K. Chesterton's case for the faith, made to the common reader",
-      "accent": "#6a5a8a",
-      "about": [
-        "G. K. Chesterton made the case for the creed to the common reader in three books: Heretics (1905), Orthodoxy (1908) and The Everlasting Man (1925).",
-        "Lérins Chesterton prints them for the reader they were written for."
+        "The books Christians have prayed with for sixteen centuries: Augustine's Confessions, written as one long prayer, the English mystics, the Imitation of Christ, Teresa of Ávila and John of the Cross, Francis de Sales and Brother Lawrence, William Law, Thérèse of Lisieux and A. W. Tozer.",
+        "Lérins Devotions prints them to be read slowly and kept close."
       ],
       "parts": []
     }
