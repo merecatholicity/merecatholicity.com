@@ -88,11 +88,11 @@
       "slug": "lerins-chesterton",
       "name": "Lérins Chesterton",
       "short": "Chesterton",
-      "tagline": "The chief works of G. K. Chesterton, in the order he wrote them",
+      "tagline": "G. K. Chesterton in four volumes, two books to a volume",
       "accent": "#6a5a8a",
       "about": [
         "G. K. Chesterton (1874 to 1936) was a journalist, poet, novelist and critic, the author of Orthodoxy and The Everlasting Man and of the Father Brown stories. He was received into the Catholic Church in 1922.",
-        "Lérins Chesterton prints his chief books in the order he published them: the apologetics, Father Brown, the novels and the verse, and the social and historical books."
+        "Lérins Chesterton prints his prose argument in four volumes of two books each: Heretics · Orthodoxy, The Everlasting Man · The Thing, What’s Wrong with the World · The Outline of Sanity, and the essays, Tremendous Trifles · All Things Considered."
       ],
       "parts": []
     },
@@ -100,11 +100,11 @@
       "slug": "lerins-macdonald",
       "name": "Lérins MacDonald",
       "short": "MacDonald",
-      "tagline": "The chief works of George MacDonald, in the order he wrote them",
+      "tagline": "George MacDonald in four volumes",
       "accent": "#2a5d6b",
       "about": [
         "George MacDonald (1824 to 1905), a Scottish Congregational minister who left the pulpit for the pen, wrote fairy tales and fantasies, novels of Scottish life, poems and three series of Unspoken Sermons. C. S. Lewis named him his master, and G. K. Chesterton counted him among the great writers of his age.",
-        "Lérins MacDonald prints his chief books in the order he published them, from Phantastes to Lilith: the fantasies, the fairy tales, the sermons and the verse."
+        "Lérins MacDonald prints his chief books in four volumes: Phantastes · Lilith, the three series of Unspoken Sermons, At the Back of the North Wind · Dealings with the Fairies, and The Princess and the Goblin · The Princess and Curdie."
       ],
       "parts": []
     },
