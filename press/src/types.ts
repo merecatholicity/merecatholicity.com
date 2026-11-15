@@ -8,9 +8,6 @@ export interface Press {
   parent: { name: string; url: string };
   motto: { latin: string; english: string; source: string };
   about: string[];
-  /** The About page after the motto: the rule applied to the press's work, and where to read
-   *  the case at length. The rule itself is stated once, in the motto, and never again. */
-  hope: { heading: string; paragraphs: string[]; further: { label: string; url: string; note: string }[] };
   /** The press's own accounts (none yet): the footer's links and the JSON-LD sameAs. */
   social: { name: string; url: string }[];
   /** The titles the home page's carousel shows, in order, by slug. */

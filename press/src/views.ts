@@ -418,16 +418,6 @@ function about(cat: Catalogue): TemplateResult {
     <article class="prose">
       <h1 tabindex="-1">About the press</h1>
       ${press.about.map(p => html`<p>${p}</p>`)}
-      <blockquote class="motto-block">
-        <p lang="la">${press.motto.latin}</p>
-        <p>${press.motto.english}</p>
-        <footer>${press.motto.source}</footer>
-      </blockquote>
-      <h2>${press.hope.heading}</h2>
-      ${press.hope.paragraphs.map(p => html`<p>${p}</p>`)}
-      <ul class="further">
-        ${press.hope.further.map(f => html`<li><a href=${f.url} rel="noopener">${f.label}</a>: ${f.note}.</li>`)}
-      </ul>
       <p class="about-close"><a href="/#books">See the books of ${press.name}</a></p>
     </article>`;
 }
