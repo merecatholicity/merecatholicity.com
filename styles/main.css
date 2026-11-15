@@ -684,7 +684,7 @@ img { max-width: 100%; height: auto; display: block; margin: 1.2em auto; }
   gap: 1.4rem;
   margin: 1.4em 0;
 }
-.amazon img { width: 62%; margin: 0; }
+.amazon img { width: 38%; margin: 0; }
 
 /* Click-to-zoom overlay for the cover. Any click closes it. */
 .lightbox {
