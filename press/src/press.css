@@ -328,10 +328,6 @@ main > .filter:first-child { margin-top: 18px; }
 .prose { max-width: 680px; margin: 48px auto 0; }
 .prose h1 { font-weight: normal; font-size: clamp(1.8rem, 4vw, 2.4rem); margin: 0 0 24px; }
 .prose p { color: var(--ink-soft); }
-.motto-block { margin: 36px 0; padding: 20px 24px; border-left: 2px solid var(--gold); background: var(--surface); border-radius: 0 var(--radius) var(--radius) 0; }
-.motto-block p { margin: 0; color: var(--ink); }
-.motto-block p[lang="la"] { font-style: italic; color: var(--gold); }
-.motto-block footer { margin-top: 8px; font: 0.8rem var(--font-sans); color: var(--faint); }
 
 /* Write to the press, its own page. Every field is 16px or more, so a phone never zooms in on
    focus; the red Send is the charcoal theme's, as on merecatholicity.com/contact. */
@@ -397,5 +393,3 @@ main > .filter:first-child { margin-top: 18px; }
 }
 
 /* About: the two pages on merecatholicity.com that state the case at length. */
-.further { padding-left: 1.2em; margin: 0 0 1.4em; }
-.further li { margin: 0 0 0.5em; }
