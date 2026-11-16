@@ -60,3 +60,21 @@ resource "cloudflare_d1_database" "library" {
     prevent_destroy = true
   }
 }
+
+# Lérins Press's mailing list (2026-11-16): written by the contact worker's two list doors
+# (contact-worker/src/list.ts, its schema in contact-worker/migrations/) and read by nothing on
+# the web; the comments worker's daily backup dumps it beside the ledger. A replace would
+# destroy every address on it.
+resource "cloudflare_d1_database" "press_list" {
+  account_id            = var.account_id
+  jurisdiction          = null
+  name                  = "lerins-press-list"
+  primary_location_hint = null
+  read_replication = {
+    mode = "disabled"
+  }
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
