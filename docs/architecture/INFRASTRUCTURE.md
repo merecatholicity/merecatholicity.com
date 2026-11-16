@@ -98,6 +98,7 @@ on page one.)
 - **Lérins Press wears the main site's Home painting (2026-11-11)** — `log/2026-11.md`
 - **The press's first paint is its own, and every target is a finger's width** — `log/2026-11.md`
 - **AI crawlers are welcome: Cloudflare blocks none** — `log/2026-11.md`
+- **The press's catalogue is a file of its own, not a passenger in every page** — `log/2026-11.md`
 
 ### Build system
 

@@ -436,7 +436,7 @@ main > .filter:first-child { margin-top: 18px; }
 .colophon .mark { height: 64px; }
 .colophon-name { margin: 6px 0 0; font: 500 0.95rem var(--font-caps); letter-spacing: 0.1em; color: var(--gold); }
 .colophon-links { margin: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; font: 0.85rem var(--font-sans); }
-.colophon-links a { color: var(--faint); text-decoration: none; }
+.colophon-links a { display: inline-flex; align-items: center; min-height: 24px; color: var(--faint); text-decoration: none; }
 .colophon-links a:hover { color: var(--ink); }
 
 @media (max-width: 720px) {
