@@ -343,3 +343,6 @@ jobs:
             exit 1
           fi
           grep -E '^Apply complete' /tmp/apply.txt >> "$GITHUB_STEP_SUMMARY" || true
+          # The D1 databases' ids are public by design (each stands in a wrangler.jsonc): printed so
+          # a database Terraform just made can be bound without a dashboard (terraform/outputs.tf).
+          terraform -chdir=terraform output -json d1_ids | tee -a "$GITHUB_STEP_SUMMARY"

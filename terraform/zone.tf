@@ -40,10 +40,12 @@ resource "cloudflare_zone" "main" {
   }
 }
 
+# AI crawlers are welcome (owner, 2026-11-16: "i dont want to block AI"): "Block AI bots" and
+# the AI Labyrinth (crawler_protection) are both off, and tests/py/test_ai_open.py holds them so.
 resource "cloudflare_bot_management" "main" {
-  ai_bots_protection      = "block"
+  ai_bots_protection      = "disabled"
   content_bots_protection = "disabled"
-  crawler_protection      = "enabled"
+  crawler_protection      = "disabled"
   enable_js               = true
   fight_mode              = true
   is_robots_txt_managed   = false
