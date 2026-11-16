@@ -82,6 +82,13 @@
       "binding": "LIBDB3",
       "database_name": "merecat-library-deep2",
       "database_id": "98e30c6d-dacf-4c6b-8417-ee6ad176c9a2"
+    },
+    {
+      // Lérins Press's mailing list, the contact worker's (contact-worker/src/list.ts). Bound here
+      // for the daily backup alone (runBackup dumps it beside the ledger); nothing else reads it.
+      "binding": "PRESSLIST",
+      "database_name": "lerins-press-list",
+      "database_id": "ff31e00f-d927-45e1-be87-168ac77507b8"
     }
   ],
   "vectorize": [
