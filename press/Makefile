@@ -5,7 +5,7 @@
 #   make build    build dist/ (PRESS_URL=... to build for another origin)
 #   make check    type-check src/ and scripts/
 #   make cover SRC=<front image> NAME=<slug>
-#                 a title's cover files from its front: WebP at 1000 and 480 wide (the
+#                 a title's cover files from its front: WebP at 1000, 480 and 360 wide and a 48-wide wash (the
 #                 page and the shelf) and an 800-wide .jpg (feeds, link previews)
 #   make placeholders  draw a "Cover coming soon" front for each collection whose books have no
 #                 cover yet (scripts/placeholders.ts), in the same three files
@@ -43,6 +43,8 @@ cover:
 	@test -n "$(SRC)" -a -n "$(NAME)" || { echo "usage: make cover SRC=<front image> NAME=<slug>"; exit 1; }
 	magick "$(SRC)" -strip -resize 1000x -quality 80 -define webp:method=6 content/covers/$(NAME).webp
 	magick "$(SRC)" -strip -resize 480x -quality 78 -define webp:method=6 content/covers/$(NAME)-480.webp
+	magick "$(SRC)" -strip -resize 360x -quality 76 -define webp:method=6 content/covers/$(NAME)-360.webp
+	magick "$(SRC)" -strip -resize 48x -quality 60 -define webp:method=6 content/covers/$(NAME)-wash.webp
 	magick "$(SRC)" -strip -resize 800x -quality 85 content/covers/$(NAME).jpg
 
 placeholders: node_modules/.package-lock.json
@@ -63,6 +65,7 @@ brand:
 	  -draw "color 339,519 floodfill" -draw "color 170,8 floodfill" -trim +repage -strip $(SHIELD)
 	magick $(SHIELD) -resize x144 -strip -quality 90 static/brand/shield-144.webp
 	magick $(SHIELD) -resize x400 -strip -quality 90 static/brand/shield-400.webp
+	magick $(SHIELD) -resize x280 -strip -quality 86 static/brand/shield-280.webp
 	magick $(SHIELD) -resize 60x60 -gravity center -background none -extent 64x64 -strip static/favicon.png
 	magick $(SHIELD) -resize 150x150 -gravity center -background '#0f1113' -extent 180x180 -strip static/apple-touch-icon.png
 	magick $(LOGO) -crop 784x830+0+150 +repage -resize x610 \( +clone -fill black -colorize 100 \

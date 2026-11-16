@@ -184,20 +184,27 @@ export function jsonLd(route: Route, cat: Catalogue): object {
 /** The press's mark: the shield from the owner's logo (content/brand, `make brand`). */
 const SHIELD_W = 288;
 const SHIELD_H = 469;
-const mark = (cls: string, size: 144 | 400 = 144) => html`<img class=${cls}
-  src="/brand/shield-${size}.webp" width=${SHIELD_W} height=${SHIELD_H} alt="">`;
+const mark = (cls: string) => html`<img class=${cls}
+  src="/brand/shield-144.webp" width=${SHIELD_W} height=${SHIELD_H} alt="">`;
+/** The home page's large shield, at the width it is drawn (150 to 210 px tall, press.css). */
+const heroMark = () => html`<img class="hero-shield" src="/brand/shield-400.webp" fetchpriority="high"
+  srcset="/brand/shield-280.webp 172w, /brand/shield-400.webp 246w"
+  sizes="(max-width: 625px) 92px, (max-width: 875px) 15vw, 129px"
+  width=${SHIELD_W} height=${SHIELD_H} alt="">`;
 
-/** A cover in WebP at two widths (480 for a card, 1000 for a book's page: `make cover`), the
- *  browser choosing by `sizes`; the .jpg is the fallback. Below the first row it waits for the
- *  reader to scroll near it (native lazy loading), and its width and height hold its place. */
-const cover = (t: Title, sizes: string, eager = false) => {
+/** A cover in WebP at three widths (360 for a card on a phone, 480 for a card, 1000 for a
+ *  book's page: `make cover`), the browser choosing by `sizes`; the .jpg is the fallback. Below the first row it waits for the
+ *  reader to scroll near it (native lazy loading), and its width and height hold its place.
+ *  Only the picture that is the page's largest paint asks for high priority (`high`): the
+ *  shelf's first row loads at once but waits its turn behind it. */
+const cover = (t: Title, sizes: string, eager = false, high = eager) => {
   const [w, h] = t.coverSize ?? [1000, 1510];
   return html`<picture class="cover">
   <source type="image/webp" sizes=${sizes}
-    srcset="/covers/${t.cover}-480.webp 480w, /covers/${t.cover}.webp 1000w">
+    srcset="/covers/${t.cover}-360.webp 360w, /covers/${t.cover}-480.webp 480w, /covers/${t.cover}.webp 1000w">
   <img src="/covers/${t.cover}.jpg" width=${w} height=${h} sizes=${sizes}
     style="aspect-ratio: ${w} / ${h}" alt="Cover of ${t.title}"
-    loading=${eager ? "eager" : "lazy"} fetchpriority=${eager ? "high" : "auto"} decoding="async">
+    loading=${eager ? "eager" : "lazy"} fetchpriority=${high ? "high" : "auto"} decoding="async">
 </picture>`;
 };
 
@@ -220,7 +227,7 @@ const buy = (t: Title) => !t.amazon ? soon() : html`
 
 const card = (t: Title, i: number) => html`<li class="card">
   <a class="card-link" href="/titles/${t.slug}/">
-    ${cover(t, "(max-width: 600px) 45vw, 230px", i < 4)}
+    ${cover(t, "(max-width: 600px) 45vw, 230px", i < 4, false)}
     ${t.collection ? html`<span class="card-no">No. ${t.collection.no}</span>` : nothing}
     <span class="card-title">${t.title}</span>
     ${t.subtitle ? html`<span class="card-sub">${t.subtitle}</span>` : nothing}
@@ -290,10 +297,10 @@ function featured(cat: Catalogue): TemplateResult {
         const href = `/titles/${t.slug}/`;
         const c = collectionOf(t, cat);
         return html`<article class="slide" aria-roledescription="slide" aria-label="${i + 1} of ${n}: ${t.title}">
-          <div class="slide-wash" aria-hidden="true"><img src="/covers/${t.cover}-480.webp" alt=""
-            loading=${i ? "lazy" : "eager"} decoding="async" width="480" height="725"></div>
+          <div class="slide-wash" aria-hidden="true"><img src="/covers/${t.cover}-wash.webp" alt=""
+            loading=${i ? "lazy" : "eager"} decoding="async" width="48" height="72"></div>
           <a class="slide-cover" href=${href} tabindex="-1" aria-hidden="true">
-            ${cover(t, "(max-width: 720px) 56vw, 300px", i === 0)}</a>
+            ${cover(t, "(max-width: 720px) 46vw, 300px", i === 0)}</a>
           <div class="slide-text">
             <p class="slide-kicker">${[c ? seriesLine(t, cat) : "", t.amazon ? "Now available" : c ? "" : "Lérins Press"]
               .filter(Boolean).join(" · ")}</p>
@@ -321,7 +328,7 @@ function home(cat: Catalogue, shown: number): TemplateResult {
   const placed = order.map((t, i) => ({ t, i })).filter(({ i }) => i < shown);
   return html`
     <section class="hero">
-      ${mark("hero-shield", 400)}
+      ${heroMark()}
       <h1 class="wordmark" tabindex="-1">${press.name}</h1>
       <p class="ornament" aria-hidden="true"><span></span></p>
       <p class="motto-latin" lang="la">${press.motto.latin}</p>
@@ -463,7 +470,7 @@ export function page(route: Route, cat: Catalogue, shown = SHELF_BATCH): Templat
   return html`
     <a class="skip" href="#main">Skip to content</a>
     <header class="masthead">
-      <a class="brand" href="/" aria-label="${press.name}, home">
+      <a class="brand" href="/">
         ${mark("mark")}
         <span class="brand-text">
           <span class="brand-name">${press.name}</span>
