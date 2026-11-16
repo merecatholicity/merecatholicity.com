@@ -189,6 +189,7 @@ bindings (`simple`, only 10 s/60 s windows are supported):
 | `READ_LIMIT` | **15 / 60 s** | **One shared bucket** across *all* reads (public GETs and keyed POST-reads) **and most admin actions** (`meta`, `audit`, `trust`, `moderate`, `move`, `board/admin`, `profile/admin`, `profile/clear`, `lock`, `ipban(s)`, `rdns`, `approve`, `pending`, `report/dismiss`, `admins`, `admin`, `backup`, `chat/save`). |
 | `CONNECT_LIMIT` | **10 / 60 s** | WebSocket upgrades only (`/api/comments/live`, `/api/merecat/live`). Own bucket so a reconnect storm can't starve reads. |
 | `SEND_LIMIT` (contact worker) | **3 / 60 s** | The contact form. |
+| `LIST_LIMIT` (contact worker) | **5 / 60 s** | The press's mailing list doors. |
 
 429 bodies are `{ok:false, error:"Too many …"}` (wording varies per endpoint);
 `/feed` and the WS upgrades return plain text. **A native client with any
@@ -1062,6 +1063,24 @@ The allowed origins are `merecatholicity.com`, `www.merecatholicity.com` and
 `press.merecatholicity.com` (Lérins Press's Correspondence page, 2026-11-12), and
 `TURNSTILE_HOSTNAMES` names the same three. A message from the press is subjected
 `press.merecatholicity.com: message from …`, every other `merecatholicity.com: …`.
+
+### 9.1 Lérins Press's mailing list (2026-11-16)
+
+`POST https://contact-api.merecatholicity.com/subscribe` and `…/unsubscribe`
+(`contact-worker/src/list.ts`). Form-encoded. Fields: `email` (required, ≤254, a
+browser email field's shape, lower-cased), `consent=yes` (required on
+`/subscribe` only), `cf-turnstile-response` (a token solved with the action
+`subscribe` or `unsubscribe`, the door's own), and never `website` (honeypot →
+`{ok:true}`, nothing written). The **Origin must be
+`https://press.merecatholicity.com`**; an absent Origin is refused here. Gates in
+order: origin → `LIST_LIMIT` 5/60 s per IP → form parse → honeypot → address →
+consent → Turnstile (success, action, hostname). Then one statement on the D1
+`lerins-press-list`: an upsert that keeps the first `joined_at`, or a delete.
+Responses: `200 {ok:true}` whether or not the address was on the list ·
+`400` (bad request / address / consent) · `403` (origin / Turnstile) · `429` ·
+`502` (the database failed). **Every answer, refusals included, leaves 1.5 s
+after the request arrived.** Nothing reads the list back over HTTP, nothing is
+mailed, and no address is logged.
 
 ---
 

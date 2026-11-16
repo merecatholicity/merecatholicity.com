@@ -60,6 +60,8 @@ test('the backup key round-trips its day, and the prune keeps 90 days, first-of-
   assert.equal(just(Ops.dayOfKey('backups/comments-2026-09-01.sql.gz')), '2026-09-01', 'the monthly objects from before are first-of-month objects under this rule');
   assert.equal(just(Ops.dayOfKey('avatars/abc.png')), null);
   assert.equal(just(Ops.dayOfKey('backups/comments-2026-9-1.sql.gz')), null, 'a malformed day is not ours');
+  assert.equal(Ops.listBackupKey('2026-11-16'), 'backups/press-list-2026-11-16.sql.gz');
+  assert.equal(just(Ops.dayOfKey('backups/press-list-2026-11-16.sql.gz')), '2026-11-16', 'the press list is pruned by the same rule');
   const keep = (key: string, ageDays: number) => Ops.keepBackup({ key, ageDays });
   assert.equal(keep('backups/comments-2026-09-16.sql.gz', 89), true);
   assert.equal(keep('backups/comments-2026-09-16.sql.gz', 90), true);

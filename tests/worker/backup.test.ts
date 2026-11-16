@@ -14,7 +14,9 @@ import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { gunzipSync } from 'node:zlib';
 import { DatabaseSync } from 'node:sqlite';
-import { loadWorker, makeEnv, freshDb, identity, establish, call, resetCaches } from '../_support/worker.ts';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { loadWorker, makeEnv, freshDb, identity, establish, call, resetCaches, d1 } from '../_support/worker.ts';
 import { dumpDatabase, runBackup, mirrorAvatars, sqlLit } from '../../comments-worker/src/lib.ts';
 
 type Env = Parameters<typeof runBackup>[0];
@@ -98,6 +100,30 @@ test('runBackup writes today\'s object, prunes by the kernel\'s rule, and record
   const rec = JSON.parse(db.prepare("SELECT v FROM app_settings WHERE k = 'ops_backup'").get()!.v as string);
   assert.deepEqual([rec.key, rec.bytes, rec.tables, rec.rows, rec.error], [r.key, r.bytes, r.tables, r.rows, undefined], 'the record the self-check reads');
   db.close();
+});
+
+test('the press mailing list is dumped beside the ledger, restorable, and pruned by the same rule', async () => {
+  const db = seeded();
+  const list = new DatabaseSync(':memory:');
+  list.exec(readFileSync(fileURLToPath(new URL('../../contact-worker/migrations/0001_list.sql', import.meta.url).href), 'utf8'));
+  list.prepare("INSERT INTO list VALUES ('reader@example.com', 'press-2026-11', '2026-11-16T00:00:00.000Z'), ('o''brien@example.org', 'press-2026-11', '2026-11-16T00:00:01.000Z')").run();
+  const env = makeEnv({ db });
+  Object.assign(env, { PRESSLIST: d1(list) });
+  const old = (key: string, days: number) => env.BACKUPS.objects.set(key, { bytes: new Uint8Array(2000), meta: {}, uploaded: new Date(Date.now() - days * 86400000) });
+  old('backups/press-list-2026-06-15.sql.gz', 93);  // a daily past 90
+  old('backups/press-list-2026-09-10.sql.gz', 6);   // a recent daily
+  const r = await runBackup(env as unknown as Env);
+  const today = new Date().toISOString().slice(0, 10);
+  assert.ok(r.list);
+  assert.deepEqual([r.list.key, r.list.rows], ['backups/press-list-' + today + '.sql.gz', 2]);
+  assert.ok(!env.BACKUPS.objects.has('backups/press-list-2026-06-15.sql.gz'), 'pruned like the ledger');
+  assert.ok(env.BACKUPS.objects.has('backups/press-list-2026-09-10.sql.gz'));
+  const text = (gunzipSync(Buffer.from(env.BACKUPS.objects.get(r.list.key).bytes)) as { toString(encoding: string): string }).toString('utf8');
+  assert.match(text, /^-- lerins-press-list backup /);
+  assert.doesNotMatch(text, /comments_fts|"profiles"/, 'the list alone, nothing of the ledger');
+  const back = new DatabaseSync(':memory:'); back.exec(text);
+  assert.deepEqual(back.prepare('SELECT email FROM list ORDER BY email').all().map((x) => x.email), ["o'brien@example.org", 'reader@example.com']);
+  back.close(); list.close(); db.close();
 });
 
 test('a failed backup leaves its record and rethrows; the admin door still answers the documented shape', async () => {

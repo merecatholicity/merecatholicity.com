@@ -25,6 +25,9 @@ export interface Env {
   LIBDB: D1Database;
   LIBDB2: D1Database;
   LIBDB3: D1Database;
+  /* Lérins Press's mailing list, the contact worker's (contact-worker/src/list.ts): bound here
+     only so the daily backup dumps it. Nothing in this worker reads it otherwise. */
+  PRESSLIST?: D1Database;
   /* Vectorize and Workers AI (merecat) */
   MERECAT_INDEX: VectorizeIndex;
   AI: Ai;

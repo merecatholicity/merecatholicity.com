@@ -1,17 +1,27 @@
 // The browser half: take over the server-rendered page and navigate without reloads.
-// The catalogue rides the page itself (#press-data), so a hop fetches nothing.
+// The catalogue is a file of its own, named by a hash of its bytes (scripts/build.ts, the
+// #app element's data-catalogue): fetched once the page has loaded, then kept by the browser for
+// every later page and hop, so no page's first paint carries it. Until it comes (or if it never
+// does) the links are plain links and the forms work as ever.
 import { render } from "lit";
 import { hydrate } from "@lit-labs/ssr-client";
 import type { Catalogue, Route } from "./types.ts";
 import { bindContact } from "./contact.ts";
+import { bindSignup } from "./signup.ts";
 import { bindCarousel } from "./carousel.ts";
 import { SHELF_BATCH, headTags, metaOf, nav, page, routeOf, shelfOrder } from "./views.ts";
 
-const dataEl = document.getElementById("press-data");
 const root = document.getElementById("app");
+bindContact();
+bindSignup();
+const src = root?.dataset.catalogue;
+// Not before the load: the first paint (and its largest image) has the network to itself.
+if (document.readyState !== "complete") await new Promise(r => addEventListener("load", r, { once: true }));
+const cat = src
+  ? await fetch(src).then(r => (r.ok ? r.json() as Promise<Catalogue> : null)).catch(() => null)
+  : null;
 
-if (dataEl && root) {
-  const cat = JSON.parse(dataEl.textContent ?? "{}") as Catalogue;
+if (cat && root) {
 
   const setMeta = (sel: string, attr: string, value: string) =>
     document.querySelector(sel)?.setAttribute(attr, value);
@@ -109,5 +119,4 @@ if (dataEl && root) {
   });
 
   window.addEventListener("popstate", () => show(location.pathname, false));
-  bindContact();
 }

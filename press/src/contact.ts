@@ -1,10 +1,12 @@
-// The footer's contact form: the same road as merecatholicity.com/contact.html (pagejs/contact.ts
-// there), to the same worker (contact-api.merecatholicity.com), which mails the owner.
+// The press's forms, Contact and the home page's mailing list (join, and leave): the same road
+// as merecatholicity.com/contact.html (pagejs/contact.ts there), to the same worker
+// (contact-api.merecatholicity.com), which mails the owner a message and keeps a list address.
 //
 // The challenge never mounts on arrival: Cloudflare's script is loaded only once a reader shows
-// intent, the first focus of a field or the Send press, and then mounted once. A token is
-// single-use, so every answer resets the widget. The listeners are the document's, so a page the
-// client draws on a hop needs nothing bound again.
+// intent, the first focus of a field or a press, and then each form's widget is mounted once in
+// its own slot, solved for its own action (the worker checks it, so a token earned for one door
+// opens no other). A token is single-use, so every answer resets the widget. The listeners are
+// the document's, so a page the client draws on a hop needs nothing bound again.
 
 const API = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=__pressTs";
 /** The contact widget's sitekey (public by design), and Cloudflare's always-pass test key on
@@ -20,25 +22,34 @@ declare global {
   interface Window { turnstile?: Turnstile; __pressTs?: () => void }
 }
 
-let widgetId: string | undefined;
-let wanted = false;
+/** The forms this binds: the Turnstile action each is solved for, and what each says when the
+ *  worker takes it. The list's answers are the same whether or not the address was on it, so
+ *  neither form tells anyone who is. */
+const FORMS: Record<string, { action?: string; said: string }> = {
+  "press-contact": { said: "Sent. Thank you." },
+  "press-list": { action: "subscribe", said: "You're on the list. Thank you." },
+  "press-unlist": { action: "unsubscribe", said: "Done. That address is off the list." },
+};
 
-const form = () => document.getElementById("press-contact") as HTMLFormElement | null;
+const widgets = new Map<HTMLFormElement, string>();
+const wanted = new Set<HTMLFormElement>();
 const token = (f: HTMLFormElement) =>
   f.querySelector<HTMLInputElement>('input[name="cf-turnstile-response"]')?.value ?? "";
 
-function mount() {
-  const slot = form()?.querySelector(".contact-ts");
+function mount(f: HTMLFormElement) {
+  const slot = f.querySelector(".contact-ts");
   if (!slot || !window.turnstile || slot.hasAttribute("data-rendered")) return;
   slot.setAttribute("data-rendered", "1");
   try {
     // Never re-run the challenge on a timer or a loop: a spent token is reset at the press.
-    widgetId = window.turnstile.render(slot, {
+    const id = window.turnstile.render(slot, {
       sitekey: SITEKEY, theme: "dark", "refresh-expired": "never", retry: "never",
+      ...(FORMS[f.id]?.action ? { action: FORMS[f.id].action } : {}),
     });
+    if (id !== undefined) widgets.set(f, id);
   } catch { /* a double render throws: the first stands */ }
 }
-window.__pressTs = () => { if (wanted) mount(); };
+window.__pressTs = () => { for (const f of wanted) if (f.isConnected) mount(f); };
 
 /** The zone's CSP reports any script URL set without a Trusted Type (report-only), so the one
  *  script this page ever adds by hand goes through a policy that passes Cloudflare's alone. */
@@ -54,9 +65,9 @@ if (tt) {
   } catch { /* a policy of that name already stands */ }
 }
 
-function want() {
-  wanted = true;
-  if (window.turnstile) { mount(); return; }
+function want(f: HTMLFormElement) {
+  wanted.add(f);
+  if (window.turnstile) { mount(f); return; }
   if (document.querySelector('script[src^="https://challenges.cloudflare.com/"]')) return;
   const s = document.createElement("script");
   s.src = scriptUrl(API);
@@ -64,33 +75,35 @@ function want() {
   document.head.append(s);
 }
 
-const fresh = () => {
-  try { if (window.turnstile && widgetId !== undefined) window.turnstile.reset(widgetId); }
+const fresh = (f: HTMLFormElement) => {
+  const id = widgets.get(f);
+  try { if (window.turnstile && id !== undefined) window.turnstile.reset(id); }
   catch { /* the next press says so */ }
 };
 
 export function bindContact() {
   document.addEventListener("focusin", e => {
     const t = e.target as HTMLInputElement | null;
-    if (t?.form?.id === "press-contact" && /^(INPUT|TEXTAREA)$/.test(t.tagName) && t.name !== "website") want();
+    if (t?.form && FORMS[t.form.id] && /^(INPUT|TEXTAREA)$/.test(t.tagName) && t.name !== "website") want(t.form);
   });
   document.addEventListener("submit", e => {
     const f = e.target as HTMLFormElement;
-    if (f.id !== "press-contact") return;
+    const form = FORMS[f.id];
+    if (!form) return;
     e.preventDefault();
     const status = f.querySelector<HTMLElement>(".contact-status")!;
     const button = f.querySelector<HTMLButtonElement>("button[type=submit]")!;
     button.disabled = true;
-    want();
+    want(f);
     // No token: the widget was never touched, or its token aged out (five minutes) while the
     // message was written. Earn another rather than send a request that would be refused.
-    if (!token(f) && widgetId !== undefined) fresh();
+    if (!token(f)) fresh(f);
     status.textContent = token(f) ? "Sending..." : "Verifying...";
     let waited = 0;
     const go = () => {
       if (!token(f)) {
         if (waited >= 15000) {
-          status.textContent = "Verification is taking a moment. Complete the check above, then press Send again.";
+          status.textContent = "Verification is taking a moment. Complete the check above, then press again.";
           button.disabled = false;
           return;
         }
@@ -102,13 +115,17 @@ export function bindContact() {
       fetch(f.action, { method: "POST", body: new FormData(f) })
         .then(r => r.json() as Promise<{ ok?: boolean; error?: string }>)
         .then(d => {
-          if (d.ok) { f.reset(); status.textContent = "Sent. Thank you."; }
+          if (d.ok) {
+            f.reset();
+            status.textContent = form.said;
+            f.dispatchEvent(new CustomEvent("press-form-ok", { bubbles: true }));
+          }
           else status.textContent = d.error || "Something went wrong. Please try again.";
-          fresh();
+          fresh(f);
         })
         .catch(() => {
           status.textContent = "Could not reach the server. Please try again.";
-          fresh();
+          fresh(f);
         })
         .finally(() => { button.disabled = false; });
     };

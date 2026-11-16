@@ -10,7 +10,15 @@
   // Per-IP throttle. The simple binding supports only 10s/60s windows, so this
   // caps bursts at 3/min/IP; Turnstile remains the first gate in front of it.
   "ratelimits": [
-    { "name": "SEND_LIMIT", "namespace_id": "2001", "simple": { "limit": 3, "period": 60 } }
+    { "name": "SEND_LIMIT", "namespace_id": "2001", "simple": { "limit": 3, "period": 60 } },
+    // The press's mailing list doors (src/list.ts), per IP, before the Turnstile call.
+    { "name": "LIST_LIMIT", "namespace_id": "2002", "simple": { "limit": 5, "period": 60 } }
+  ],
+  // Lérins Press's mailing list: written by /subscribe and /unsubscribe, read by nothing here.
+  // Terraform owns the database (press_list in terraform/d1.tf); its schema is migrations/, applied
+  // by workers.yml before this worker deploys. The comments worker binds it for the backup alone.
+  "d1_databases": [
+    { "binding": "LIST", "database_name": "lerins-press-list", "database_id": "ff31e00f-d927-45e1-be87-168ac77507b8", "migrations_dir": "migrations" }
   ],
   "vars": {
     // Turnstile tokens are accepted only when solved on one of these hosts.

@@ -105,8 +105,11 @@ for (const t of titles) {
   writeFileSync(join(DIST, t.card), jpg);
 }
 
-// The catalogue rides every page; "<" is escaped so no title can close the script.
-const data = JSON.stringify(cat).replace(/</g, "\\u003c");
+// The catalogue the client hops with: a file of its own, named by its bytes, so the browser keeps
+// it for good and no page's HTML carries it (it was four fifths of every page).
+const data = JSON.stringify(cat);
+const dataName = `assets/catalogue-${hash(data)}.json`;
+writeFileSync(join(DIST, dataName), data);
 
 function document(route: Route): string {
   const meta = metaOf(route, cat);
@@ -129,14 +132,13 @@ ${headTags(meta, cat).map(([a, k, v]) => `<meta ${a}="${k}" content="${esc(v)}">
 <script type="module" src="/${jsName}"></script>
 </head>
 <body>
-<div id="app">${body}</div>
-<script type="application/json" id="press-data">${data}</script>
+<div id="app" data-catalogue="/${dataName}">${body}</div>
 </body>
 </html>
 `;
 }
 
-const routes: Route[] = [{ kind: "home" }, { kind: "about" }, { kind: "contact" },
+const routes: Route[] = [{ kind: "home" }, { kind: "about" }, { kind: "contact" }, { kind: "privacy" }, { kind: "terms" },
   ...shelves(cat).map(collection => ({ kind: "collection" as const, collection })),
   ...titles.map(title => ({ kind: "title" as const, title }))];
 for (const route of routes) {

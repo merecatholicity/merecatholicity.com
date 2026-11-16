@@ -260,7 +260,8 @@ jobs:
             *)       (cd comments-worker && npx wrangler deploy) ;;
           esac
           if [ "$CONTACT" = "yes" ]; then
-            (cd contact-worker && npx wrangler deploy)
+            # Lérins Press's mailing list: its own ledger, applied before the doors that write it.
+            (cd contact-worker && npx wrangler d1 migrations apply lerins-press-list --remote && npx wrangler deploy)
           else
             echo "contact worker unchanged — not redeployed"
           fi

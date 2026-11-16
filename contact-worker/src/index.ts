@@ -8,6 +8,7 @@
 
 import { guardResponse, sealEnv, secretValues } from '../../comments-worker/src/egress.ts';
 import { PUBLIC_VARS } from './vars.ts';
+import { ACTIONS, apply, atFloor, clock, normalEmail, type Door } from './list.ts';
 
 interface Env {
   ALLOWED_ORIGINS?: string;
@@ -16,7 +17,10 @@ interface Env {
   TURNSTILE_HOSTNAMES?: string;
   CONTACT_TO?: string;
   SEND_LIMIT: { limit(o: { key: string }): Promise<{ success: boolean }> };
+  LIST_LIMIT: { limit(o: { key: string }): Promise<{ success: boolean }> };
   EMAIL: { send(msg: unknown): Promise<void> };
+  /* Lérins Press's mailing list (src/list.ts), written and never read here. */
+  LIST: { prepare(sql: string): { bind(...v: unknown[]): { run(): Promise<unknown> } } };
 }
 
 /* Lérins Press (press/) posts its Correspondence page here too (2026-11-12). */
@@ -70,6 +74,11 @@ async function handle(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'POST') {
     return json({ ok: false, error: 'Method not allowed.' }, 405, request, env);
   }
+
+  /* The press's mailing list has its own two doors (src/list.ts); every other path is the
+     contact form, as it always was. */
+  const path = new URL(request.url).pathname;
+  if (path in ACTIONS) return list(request, env, path as Door, clock.now());
 
   /* Enforce the origin allow-list server-side; CORS only advises browsers. */
   const origin = request.headers.get('Origin');
@@ -153,4 +162,53 @@ async function handle(request: Request, env: Env): Promise<Response> {
   }
 
   return json({ ok: true }, 200, request, env);
+}
+
+/* The mailing list's doors (src/list.ts says why each rule is there). Every answer, a refusal
+   included, leaves at the same fixed time after arrival, and every answer that reaches the
+   list is the one { ok: true }, whatever the list held. */
+async function list(request: Request, env: Env, door: Door, start: number): Promise<Response> {
+  const say = (body: unknown, status: number) => atFloor(start, json(body, status, request, env));
+  if (request.headers.get('Origin') !== 'https://press.merecatholicity.com') {
+    return say({ ok: false, error: 'Bad origin.' }, 403);
+  }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  if (!(await env.LIST_LIMIT.limit({ key: ip })).success) {
+    return say({ ok: false, error: 'Too many tries. Wait a minute and try again.' }, 429);
+  }
+  let form;
+  try {
+    form = await request.formData();
+  } catch {
+    return say({ ok: false, error: 'Bad request.' }, 400);
+  }
+  /* The honeypot: a bot is told what a person is told, and nothing is written. */
+  if (form.get('website')) return say({ ok: true }, 200);
+  const email = normalEmail(form.get('email'));
+  if (!email) return say({ ok: false, error: 'Enter a valid email address.' }, 400);
+  if (door === '/subscribe' && form.get('consent') !== 'yes') {
+    return say({ ok: false, error: 'Tick the box to agree to the emails first.' }, 400);
+  }
+  const verifyResponse = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+    method: 'POST',
+    body: new URLSearchParams({
+      secret: env.TURNSTILE_SECRET,
+      response: String(form.get('cf-turnstile-response') || ''),
+      remoteip: ip,
+    }),
+  });
+  const verdict = await verifyResponse.json() as { success?: boolean; hostname?: string; action?: string };
+  const allowedHosts = (env.TURNSTILE_HOSTNAMES || '').split(',').map((h: string) => h.trim()).filter(Boolean);
+  if (!verdict.success || verdict.action !== ACTIONS[door]
+    || (allowedHosts.length && !allowedHosts.includes(verdict.hostname as string))) {
+    return say({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
+  }
+  try {
+    await apply(env.LIST, door, email, new Date(start));
+  } catch (err) {
+    /* The error's text only: it never names the address. */
+    console.log(JSON.stringify({ event: 'list_failed', door, error: String(err).replace(/\S+@\S+/g, '<address>') }));
+    return say({ ok: false, error: 'Something went wrong. Please try again.' }, 502);
+  }
+  return say({ ok: true }, 200);
 }
