@@ -1,10 +1,10 @@
 /* A DM bell names its conversation (migration 0016): notifyDm coalesces one
  * UNREAD 'dm' row per (recipient, thread) — a burst in a group of ten
- * surfaces once, whoever spoke — and a row from before, with no thread on
- * it, still coalesces by its sender.
+ * surfaces once, whoever spoke. (The rows from before, with no thread on
+ * them, were read by 0021 and their sender clause retired.)
  *
  * What would break silently: a group burying the list (one row per speaker);
- * two conversations sharing one bell; a legacy row swallowing every sender's.
+ * two conversations sharing one bell.
  * The statement is lifted from lib.ts and run on the real ledger. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -24,18 +24,18 @@ function freshDb() {
 }
 const FRAGMENTS = [
   "SELECT ?1, 'dm', ?4, 0, ?2, ?3 WHERE NOT EXISTS (",
-  "SELECT 1 FROM notifications WHERE recipient_hash = ?1 AND kind = 'dm' AND topic_id = ?4 AND (?4 > 0 OR actor_hash = ?2) AND read_at IS NULL)",
+  "SELECT 1 FROM notifications WHERE recipient_hash = ?1 AND kind = 'dm' AND topic_id = ?4 AND read_at IS NULL)",
 ];
 const me = 'a'.repeat(64), ann = 'b'.repeat(64), bob = 'c'.repeat(64);
 
-test('notifyDm coalesces per conversation, and by sender for a row with no thread on it', () => {
+test('notifyDm coalesces per conversation', () => {
   const body = libSrc.slice(libSrc.indexOf('export async function notifyDm('), libSrc.indexOf('\n}\n', libSrc.indexOf('export async function notifyDm(')));
   for (const f of FRAGMENTS) assert.ok(body.includes(f), 'lib.ts carries: ' + f);
   assert.ok(/kind: 'dm', topic_id: tid, comment_id: 0, actor_hash: fromHash, created_at: now/.test(body), 'the live ping names the thread too');
   const db = freshDb();
   const stmt = db.prepare('INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) ' +
     "SELECT :me, 'dm', :tid, 0, :from, :now WHERE NOT EXISTS (" +
-    "SELECT 1 FROM notifications WHERE recipient_hash = :me AND kind = 'dm' AND topic_id = :tid AND (:tid > 0 OR actor_hash = :from) AND read_at IS NULL)");
+    "SELECT 1 FROM notifications WHERE recipient_hash = :me AND kind = 'dm' AND topic_id = :tid AND read_at IS NULL)");
   const n = () => db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE kind = 'dm'").get()!.n;
   stmt.run({ me, from: ann, now: 1, tid: 7 });
   stmt.run({ me, from: ann, now: 2, tid: 7 });
@@ -47,10 +47,6 @@ test('notifyDm coalesces per conversation, and by sender for a row with no threa
   db.prepare("UPDATE notifications SET read_at = 5 WHERE topic_id = 7").run();
   stmt.run({ me, from: ann, now: 6, tid: 7 });
   assert.equal(n(), 3, 'read, then spoken to again: a new bell');
-  stmt.run({ me, from: ann, now: 7, tid: 0 });
-  stmt.run({ me, from: bob, now: 8, tid: 0 });
-  stmt.run({ me, from: bob, now: 9, tid: 0 });
-  assert.equal(n(), 5, 'no thread on the row: one per sender, as before 0016');
   db.close();
 });
 

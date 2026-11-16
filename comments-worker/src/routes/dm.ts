@@ -634,13 +634,12 @@ async function handleDmThread(request: Request, env: Env, ctx: ExecutionContext)
   ).bind(me, now, thread.id, floor).run();
   /* Opening the conversation READS its bells (2026-09-12): every unread
      notification this conversation rang me — a message, a reaction to my
-     word, a missed call — however I got here, from the bell or on my own; a
-     row from before 0016 (no thread on it) is matched by the pair's other.
+     word, a missed call — however I got here, from the bell or on my own.
      The fresh count rides the payload so the client's badge tells the truth
      at once. */
   await env.DB.prepare(
-    "UPDATE notifications SET read_at = ?3 WHERE recipient_hash = ?1 AND kind IN ('dm','dm-react','call') AND (topic_id = ?2 OR (topic_id = 0 AND actor_hash = ?4)) AND read_at IS NULL"
-  ).bind(me, thread.id, now, other || '').run();
+    "UPDATE notifications SET read_at = ?3 WHERE recipient_hash = ?1 AND kind IN ('dm','dm-react','call') AND topic_id = ?2 AND read_at IS NULL"
+  ).bind(me, thread.id, now).run();
   /* Start the disappearing-message clock. The messages this viewer is a
      recipient of, and is opening for the first time, get opened_at = now and a
      fresh expires_at = now + the conversation ttl, overriding the unopened
@@ -868,7 +867,7 @@ async function handleDmSeen(request: Request, env: Env, ctx: ExecutionContext) {
   const { data, me } = pre;
   const found = await dmThreadFor(env, me, data);
   if (!found || !found.thread) return json({ ok: true }, 200);
-  const thread = found.thread, other = found.other;
+  const thread = found.thread;
   const now = Math.floor(Date.now() / 1000);
   const settings = await getAppSettings(env);
   const ttl = thread.ttl || dmDefaultTtl(settings);
@@ -897,8 +896,8 @@ async function handleDmSeen(request: Request, env: Env, ctx: ExecutionContext) {
      every bell this conversation rang (a message, a reaction, a missed call),
      and the fresh count goes back so the badge follows at once. */
   await env.DB.prepare(
-    "UPDATE notifications SET read_at = ?3 WHERE recipient_hash = ?1 AND kind IN ('dm','dm-react','call') AND (topic_id = ?2 OR (topic_id = 0 AND actor_hash = ?4)) AND read_at IS NULL"
-  ).bind(me, thread.id, now, other || '').run();
+    "UPDATE notifications SET read_at = ?3 WHERE recipient_hash = ?1 AND kind IN ('dm','dm-react','call') AND topic_id = ?2 AND read_at IS NULL"
+  ).bind(me, thread.id, now).run();
   return json({ ok: true, notif_unread: await notifUnreadCount(env, me) }, 200);
 }
 

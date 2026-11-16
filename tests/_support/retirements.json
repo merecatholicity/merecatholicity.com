@@ -1,18 +1,10 @@
 [
- {
-  "what": "weakKeyTolerated — a WEAK identity key that already has history behind it may still write",
-  "where": "comments-worker/src/lib.ts",
-  "pattern": "function weakKeyTolerated\\(",
-  "since": "2026-09-18",
-  "due": "2026-12-04",
-  "how": "delete weakKeyTolerated() and the `known && weakKeyTolerated()` clause in keyFloor, so the floor holds for EVERY write. A weak-key member is no longer locked out: key rotation (POST /profile/rekey, 2026-09-18) lets them move to a strong key with their content, so on the due date a weak key is refused a write and told to rotate. Run scripts/key_audit.py first and give any cracked member a heads-up to rotate; move this date only if one cannot be reached in time. — moved from 2026-10-18 on 2026-10-19: scripts/key_audit.py has not been run and no weak-key member has had the heads-up yet; both come first. — moved from 2026-11-02 on 2026-11-04: scripts/key_audit.py has still not been run and no weak-key member has had the heads-up; the owner's call, made with CI red on every pull request because of it."
- },
- {
-  "what": "the legacy actor_hash clause: a DM bell from before 0016 named its sender, not its thread",
-  "where": "comments-worker/src/lib.ts",
-  "pattern": "\\(\\?4 > 0 OR actor_hash = \\?2\\)",
-  "since": "2026-09-14",
-  "due": "2026-11-16",
-  "how": "once no unread bell with topic_id 0 remains, drop this clause and the two `topic_id = 0 AND actor_hash` clauses in routes/dm.ts; tests/worker/notif_read — moved from 2026-10-16 on 2026-10-17: two unread pre-0016 DM bells (topic_id 0) still stood in production, and this clause is what clears them when their conversation is read; retire it once none remains (or once they are marked read)."
- }
+  {
+    "what": "weakKeyTolerated — a WEAK identity key that already has history behind it may still write",
+    "where": "comments-worker/src/lib.ts",
+    "pattern": "function weakKeyTolerated\\(",
+    "since": "2026-09-18",
+    "due": "2026-12-04",
+    "how": "delete weakKeyTolerated() and the `known && weakKeyTolerated()` clause in keyFloor, so the floor holds for EVERY write. A weak-key member is no longer locked out: key rotation (POST /profile/rekey, 2026-09-18) lets them move to a strong key with their content, so on the due date a weak key is refused a write and told to rotate. Run scripts/key_audit.py first and give any cracked member a heads-up to rotate; move this date only if one cannot be reached in time. — moved from 2026-10-18 on 2026-10-19: scripts/key_audit.py has not been run and no weak-key member has had the heads-up yet; both come first. — moved from 2026-11-02 on 2026-11-04: scripts/key_audit.py has still not been run and no weak-key member has had the heads-up; the owner's call, made with CI red on every pull request because of it."
+  }
 ]
