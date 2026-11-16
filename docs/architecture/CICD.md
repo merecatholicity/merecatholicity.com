@@ -196,8 +196,9 @@ for both workers (needs no auth).
 
 *`deploy`* (push to `main` / dispatch, on `scope`'s yes and a green `check`): `make psbuild`;
 with `CLOUDFLARE_ROOT_TOKEN`: `wrangler d1 migrations apply merecatholicity-comments --remote`
-**then** `wrangler deploy` (comments worker; the contact worker only when `scope` says so); then `GET
-/api/comments/config` must not 5xx (Bot Fight Mode may 403 a runner — not a verdict).
+**then** `wrangler deploy` (comments worker; the contact worker only when `scope` says so,
+after its own `wrangler d1 migrations apply lerins-press-list --remote`, the press's mailing
+list); then `GET /api/comments/config` must not 5xx (Bot Fight Mode may 403 a runner — not a verdict).
 
 *Order matters:* the migration ledger is applied before the new code; every migration in
 this repository is additive, which is what makes those seconds safe for the old code.

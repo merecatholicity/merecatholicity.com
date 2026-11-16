@@ -4,6 +4,7 @@ import { render } from "lit";
 import { hydrate } from "@lit-labs/ssr-client";
 import type { Catalogue, Route } from "./types.ts";
 import { bindContact } from "./contact.ts";
+import { bindSignup } from "./signup.ts";
 import { bindCarousel } from "./carousel.ts";
 import { SHELF_BATCH, headTags, metaOf, nav, page, routeOf, shelfOrder } from "./views.ts";
 
@@ -110,4 +111,5 @@ if (dataEl && root) {
 
   window.addEventListener("popstate", () => show(location.pathname, false));
   bindContact();
+  bindSignup();
 }

@@ -22,6 +22,8 @@ module Domain.Ops
   , channelsFrom
   , backupPrefix
   , backupKey
+  , listBackupPrefix
+  , listBackupKey
   , dayOfKey
   , keepDays
   , keepMonthlyDays
@@ -112,11 +114,25 @@ backupPrefix = "backups/comments-"
 backupKey :: String -> String
 backupKey day = backupPrefix <> day <> ".sql.gz"
 
+-- | Lérins Press's mailing list (the contact worker's D1, 2026-11-16) is dumped by
+-- | the same daily step beside the ledger, under its own name and by the same
+-- | rule: `backups/press-list-2026-11-16.sql.gz`.
+listBackupPrefix :: String
+listBackupPrefix = "backups/press-list-"
+
+listBackupKey :: String -> String
+listBackupKey day = listBackupPrefix <> day <> ".sql.gz"
+
+-- | The day a backup object holds, the ledger's or the list's.
 dayOfKey :: String -> Maybe String
-dayOfKey key = do
-  rest <- S.stripPrefix (S.Pattern backupPrefix) key
-  day <- S.stripSuffix (S.Pattern ".sql.gz") rest
-  if S.length day == 10 then Just day else Nothing
+dayOfKey key = case under backupPrefix of
+  Just day -> Just day
+  Nothing -> under listBackupPrefix
+  where
+  under prefix = do
+    rest <- S.stripPrefix (S.Pattern prefix) key
+    day <- S.stripSuffix (S.Pattern ".sql.gz") rest
+    if S.length day == 10 then Just day else Nothing
 
 keepDays :: Int
 keepDays = 90

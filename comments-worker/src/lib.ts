@@ -2781,18 +2781,19 @@ export function sqlLit(v: unknown) {
    (sqlite_master strips the clause, so it is put back here); a second replay
    into the same database changes nothing, which is what a restore drill
    needs. `stats`, if given, is filled with the table and row counts. */
-export async function dumpDatabase(env: Env, stats?: { tables: number; rows: number }) {
-  const master = await env.DB.prepare(
+export async function dumpDatabase(env: Env, stats?: { tables: number; rows: number },
+  db: D1Database = env.DB, name = 'merecatholicity-comments') {
+  const master = await db.prepare(
     "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL " +
     "AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'comments_fts%' " +
     "ORDER BY type = 'index', name"
   ).all<{ type: string; name: string; sql: string }>();
-  const parts = ['-- merecatholicity-comments backup ' + new Date().toISOString()];
+  const parts = ['-- ' + name + ' backup ' + new Date().toISOString()];
   for (const m of master.results) {
     if (m.type === 'table') {
       parts.push(m.sql.replace(/^CREATE TABLE\s+/i, 'CREATE TABLE IF NOT EXISTS ') + ';');
       if (stats) stats.tables++;
-      const rows = await env.DB.prepare('SELECT * FROM "' + m.name + '"').all<Record<string, unknown>>();
+      const rows = await db.prepare('SELECT * FROM "' + m.name + '"').all<Record<string, unknown>>();
       const rs = rows.results;
       if (stats) stats.rows += rs.length;
       if (!rs.length) continue;
@@ -2810,7 +2811,7 @@ export async function dumpDatabase(env: Env, stats?: { tables: number; rows: num
   /* The search index is derived data — its shadow tables are excluded above.
      Instead emit its virtual table and triggers and a rebuild, so restoring
      this one file brings search back from the restored comments, no extra step. */
-  const fts = await env.DB.prepare(
+  const fts = await db.prepare(
     "SELECT sql FROM sqlite_master WHERE (name = 'comments_fts' OR (type = 'trigger' AND tbl_name = 'comments')) " +
     "AND sql IS NOT NULL ORDER BY type = 'trigger', name"
   ).all<{ sql: string }>();
@@ -3014,7 +3015,10 @@ export async function pruneNotifications(env: Env) {
    `ops_backup` for the self-check and the health panel, and rethrows so the
    chain runner logs the step. Budget: the dump is ~40 D1 reads and one R2 put
    against the free plan's 1,000 binding calls per invocation (the 50 cap is
-   for EXTERNAL fetches). The avatar mirror is its own monthly step. */
+   for EXTERNAL fetches). The avatar mirror is its own monthly step. Lérins Press's mailing
+   list (PRESSLIST, the contact worker's D1) is dumped beside it under its own key
+   (Domain.Ops.listBackupKey) and pruned by the same rule; a failure there fails the step, after
+   the ledger's object is written. */
 export async function runBackup(env: Env) {
   const t0 = Date.now();
   const at = Math.floor(t0 / 1000);
@@ -3025,6 +3029,13 @@ export async function runBackup(env: Env) {
     const sql = await dumpDatabase(env, stats);
     const gz = await gzipBytes(sql);
     await env.BACKUPS.put(key, gz, { httpMetadata: { contentType: 'application/gzip' } });
+    let list: { key: string; bytes: number; rows: number } | undefined;
+    if (env.PRESSLIST) {
+      const ls = { tables: 0, rows: 0 };
+      const lgz = await gzipBytes(await dumpDatabase(env, ls, env.PRESSLIST, 'lerins-press-list'));
+      list = { key: Ops.listBackupKey(new Date(t0).toISOString().slice(0, 10)), bytes: lgz.length, rows: ls.rows };
+      await env.BACKUPS.put(list.key, lgz, { httpMetadata: { contentType: 'application/gzip' } });
+    }
     let pruned = 0, kept = 0;
     let cursor: string | undefined;
     do {
@@ -3038,7 +3049,7 @@ export async function runBackup(env: Env) {
       }
       cursor = list.truncated ? list.cursor : undefined;
     } while (cursor);
-    const result = { at, key, bytes: gz.length, sqlBytes: sql.length, tables: stats.tables, rows: stats.rows, kept, pruned, ms: Date.now() - t0 };
+    const result = { at, key, bytes: gz.length, sqlBytes: sql.length, tables: stats.tables, rows: stats.rows, list, kept, pruned, ms: Date.now() - t0 };
     await setOpsState(env, 'ops_backup', result);
     console.log(JSON.stringify({ event: 'backup', ...result }));
     return result;

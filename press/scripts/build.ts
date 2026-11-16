@@ -136,7 +136,7 @@ ${headTags(meta, cat).map(([a, k, v]) => `<meta ${a}="${k}" content="${esc(v)}">
 `;
 }
 
-const routes: Route[] = [{ kind: "home" }, { kind: "about" }, { kind: "contact" },
+const routes: Route[] = [{ kind: "home" }, { kind: "about" }, { kind: "contact" }, { kind: "privacy" }, { kind: "terms" },
   ...shelves(cat).map(collection => ({ kind: "collection" as const, collection })),
   ...titles.map(title => ({ kind: "title" as const, title }))];
 for (const route of routes) {

@@ -289,5 +289,7 @@ on page one.)
 - **The workers ship what changed since their last deploy, and everything they are built from counts (2026-10-09)** — `log/2026-10.md`
 - **An account hash on the wire now names nobody: resolveId's raw-hash tolerance is retired (2026-11-04)** — `log/2026-11.md`
 - **The "(admin)" mark is the worker's word on the row, and the client's admin list is gone (2026-11-04)** — `log/2026-11.md`
+- **The pre-0016 DM bell's sender clause is retired** — `log/2026-11.md`
+- **Lérins Press keeps a mailing list, and the list tells no one who is on it** — `log/2026-11.md`
 
 <!-- infra-index:end -->

@@ -54,6 +54,8 @@ export function pathOf(route: Route): string {
     case "home": return "/";
     case "about": return "/about/";
     case "contact": return "/contact/";
+    case "privacy": return "/privacy/";
+    case "terms": return "/terms/";
     case "collection": return `/collections/${route.collection.slug.replace(/^lerins-/, "")}/`;
     case "title": return `/titles/${route.title.slug}/`;
     case "missing": return "/404.html";
@@ -65,6 +67,8 @@ export function routeOf(path: string, cat: Catalogue): Route {
   if (p === "/") return { kind: "home" };
   if (p === "/about/") return { kind: "about" };
   if (p === "/contact/") return { kind: "contact" };
+  if (p === "/privacy/") return { kind: "privacy" };
+  if (p === "/terms/") return { kind: "terms" };
   const c = /^\/collections\/([a-z0-9-]+)\/$/.exec(p);
   const collection = c ? shelves(cat).find(x => x.slug.replace(/^lerins-/, "") === c[1]) : undefined;
   if (collection) return { kind: "collection", collection };
@@ -104,6 +108,12 @@ export function metaOf(route: Route, cat: Catalogue): Meta {
     case "contact":
       return { title: `Correspondence · ${press.name}`, description: press.about[0],
         path: "/contact/", image: OG_IMAGE };
+    case "privacy":
+      return { title: `Privacy policy · ${press.name}`, description: press.privacy[0],
+        path: "/privacy/", image: OG_IMAGE };
+    case "terms":
+      return { title: `Terms of use · ${press.name}`, description: press.terms[0],
+        path: "/terms/", image: OG_IMAGE };
     case "collection": {
       const c = route.collection;
       return { title: `${shelfName(c, cat)} · ${press.name}`, description: c.about[0] ?? c.tagline,
@@ -336,6 +346,7 @@ function home(cat: Catalogue, shown: number): TemplateResult {
       <p class="motto-source">${press.motto.source}</p>
     </section>
     ${featured(cat)}
+    ${signup()}
     <h2 class="rule-head rule-head-books" id="books"><span>The books of Lérins Press</span></h2>
     ${filter(cat)}
     ${shelves(cat).map(c => collectionShelf(c, cat, placed, true))}
@@ -456,6 +467,59 @@ const contact = () => html`<article class="prose contact">
   </form>
 </article>`;
 
+/** The mailing list: new books and the press's news by email. On a phone it stands in the home
+ *  page between the featured reads and the shelves (`away` pages leave it out); on a desktop it
+ *  is a small panel floating at the corner of every page, opened a moment after arrival and
+ *  closed with its × until the next page load (src/signup.ts). Both forms post
+ *  to merecatholicity.com's contact worker, which keeps an address with the wording it agreed
+ *  to, deletes one on request, and answers nothing about the list (src/contact.ts binds them,
+ *  each challenge filling its slot on intent as on Contact). The consent line's words are the
+ *  worker's CONSENT: change them together, with a migration naming the new wording. */
+const signup = (away = false) => html`<section class="signup" aria-labelledby="signup-head"
+  data-away=${away ? "" : nothing}>
+  <button type="button" class="signup-close" aria-label="Close">×</button>
+  <h2 class="rule-head" id="signup-head"><span>New books by email</span></h2>
+  <div class="signup-card">
+    <form id="press-list" class="signup-form" action="https://contact-api.merecatholicity.com/subscribe" method="POST">
+      <p class="signup-lead">Hear when a new book is out.</p>
+      <div class="signup-row">
+        <label class="sr" for="signup-email">Email address</label>
+        <input id="signup-email" type="email" name="email" required maxlength="254" autocomplete="email"
+          inputmode="email" placeholder="Your email address">
+        <button type="submit" class="btn btn-paper">Subscribe</button>
+      </div>
+      <label class="signup-consent">
+        <input type="checkbox" name="consent" value="yes" required>
+        <span>Email me about new books and news from Lérins Press. Unsubscribe anytime.
+          <a href="/privacy/">Privacy</a></span>
+      </label>
+      <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <div class="contact-ts"></div>
+      <p class="contact-status" role="status"></p>
+    </form>
+    <details class="signup-leave">
+      <summary>Unsubscribe</summary>
+      <form id="press-unlist" class="signup-form" action="https://contact-api.merecatholicity.com/unsubscribe" method="POST">
+        <div class="signup-row">
+          <label class="sr" for="unlist-email">Email address to remove from the list</label>
+          <input id="unlist-email" type="email" name="email" required maxlength="254" autocomplete="email"
+            inputmode="email" placeholder="Email address to remove">
+          <button type="submit" class="btn btn-quiet">Unsubscribe</button>
+        </div>
+        <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <div class="contact-ts"></div>
+        <p class="contact-status" role="status"></p>
+      </form>
+    </details>
+  </div>
+</section>`;
+
+/** The privacy policy and the terms: plain paragraphs from content/press.json. */
+const plain = (title: string, paras: string[]) => html`<article class="prose legal">
+  <h1 tabindex="-1">${title}</h1>
+  ${paras.map(p => html`<p>${p}</p>`)}
+</article>`;
+
 /** The whole page: masthead, the route's body, footer. `shown` is how many of the shelf's
  *  cards the page draws: the first batch on the server, more as the reader scrolls. */
 export function page(route: Route, cat: Catalogue, shown = SHELF_BATCH): TemplateResult {
@@ -465,8 +529,23 @@ export function page(route: Route, cat: Catalogue, shown = SHELF_BATCH): Templat
     : route.kind === "title" ? titlePage(route.title, cat)
     : route.kind === "about" ? about(cat)
     : route.kind === "contact" ? contact()
+    : route.kind === "privacy" ? plain("Privacy policy", press.privacy)
+    : route.kind === "terms" ? plain("Terms of use", press.terms)
     : missing();
   const here = (...k: Route["kind"][]) => k.includes(route.kind) ? "page" : nothing;
+  // The site's doors, one list: the masthead's menu draws the main ones, and the colophon draws
+  // those and the rest (the legal pages and the feeds), so the two never differ where they meet.
+  const links = (all = false) => html`
+    <a href="/" aria-current=${here("home", "collection")}>Books</a>
+    <a href="/about/" aria-current=${here("about")}>About</a>
+    <a href="/contact/" aria-current=${here("contact")}>Contact</a>
+    ${all ? html`
+      <a href="/privacy/" aria-current=${here("privacy")}>Privacy</a>
+      <a href="/terms/" aria-current=${here("terms")}>Terms</a>
+      ${press.social.map(s => html`<a href=${s.url} rel="me noopener">${s.name}</a>`)}
+      <a href="/rss.xml">RSS</a>
+      <a href="/sitemap.xml">Sitemap</a>` : nothing}
+    <a href=${press.parent.url} rel="noopener">${press.parent.url.replace(/^https:\/\//, "")}</a>`;
   return html`
     <a class="skip" href="#main">Skip to content</a>
     <header class="masthead">
@@ -477,23 +556,13 @@ export function page(route: Route, cat: Catalogue, shown = SHELF_BATCH): Templat
           <span class="brand-tag">${press.tagline}</span>
         </span>
       </a>
-      <nav class="nav" aria-label="Site">
-        <a href="/" aria-current=${here("home", "collection")}>Books</a>
-        <a href="/about/" aria-current=${here("about")}>About</a>
-        <a href="/contact/" aria-current=${here("contact")}>Contact</a>
-        <a href=${press.parent.url} rel="noopener">${press.parent.url.replace(/^https:\/\//, "")}</a>
-      </nav>
+      <nav class="nav" aria-label="Site">${links()}</nav>
     </header>
     <main id="main">${body}</main>
+    ${route.kind === "home" ? nothing : signup(true)}
     <footer class="colophon">
       ${mark("mark")}
       <p class="colophon-name">${press.name}</p>
-      <p class="colophon-links">
-        <a href=${press.parent.url} rel="noopener">${press.parent.name}</a>
-        <a href="/contact/">Contact</a>
-        ${press.social.map(s => html`<a href=${s.url} rel="me noopener">${s.name}</a>`)}
-        <a href="/rss.xml">RSS</a>
-        <a href="/sitemap.xml">Sitemap</a>
-      </p>
+      <nav class="colophon-links" aria-label="Footer">${links(true)}</nav>
     </footer>`;
 }

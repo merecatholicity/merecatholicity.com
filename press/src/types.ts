@@ -8,6 +8,9 @@ export interface Press {
   parent: { name: string; url: string };
   motto: { latin: string; english: string; source: string };
   about: string[];
+  /** The privacy policy's and the terms' paragraphs (/privacy/, /terms/). */
+  privacy: string[];
+  terms: string[];
   /** The press's own accounts (none yet): the footer's links and the JSON-LD sameAs. */
   social: { name: string; url: string }[];
   /** The titles the home page's carousel shows, in order, by slug. */
@@ -75,6 +78,8 @@ export type Route =
   | { kind: "home" }
   | { kind: "about" }
   | { kind: "contact" }
+  | { kind: "privacy" }
+  | { kind: "terms" }
   | { kind: "collection"; collection: Collection }
   | { kind: "title"; title: Title }
   | { kind: "missing" };
