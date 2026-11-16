@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import { gunzipSync } from 'node:zlib';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { loadWorker, makeEnv, freshDb, identity, establish, call, resetCaches, d1 } from '../_support/worker.ts';
 import { dumpDatabase, runBackup, mirrorAvatars, sqlLit } from '../../comments-worker/src/lib.ts';
 
@@ -104,7 +105,7 @@ test('runBackup writes today\'s object, prunes by the kernel\'s rule, and record
 test('the press mailing list is dumped beside the ledger, restorable, and pruned by the same rule', async () => {
   const db = seeded();
   const list = new DatabaseSync(':memory:');
-  list.exec(readFileSync(new URL('../../contact-worker/migrations/0001_list.sql', import.meta.url), 'utf8'));
+  list.exec(readFileSync(fileURLToPath(new URL('../../contact-worker/migrations/0001_list.sql', import.meta.url).href), 'utf8'));
   list.prepare("INSERT INTO list VALUES ('reader@example.com', 'press-2026-11', '2026-11-16T00:00:00.000Z'), ('o''brien@example.org', 'press-2026-11', '2026-11-16T00:00:01.000Z')").run();
   const env = makeEnv({ db });
   Object.assign(env, { PRESSLIST: d1(list) });
