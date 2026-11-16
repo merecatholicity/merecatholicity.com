@@ -982,13 +982,12 @@ export async function notifyDm(env: Env, toHash: string, fromHash: string, threa
     if (!notifyEnabled(pref, 'dm')) return;
     const now = Math.floor(Date.now() / 1000);
     /* Coalesced per CONVERSATION since 0016 (topic_id names the thread): a
-       burst in one group surfaces once until read; a row with no thread on
-       it still coalesces by its sender. */
+       burst in one group surfaces once until read. */
     const tid = Math.floor(Number(threadId) || 0);
     const r = await env.DB.prepare(
       "INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) " +
       "SELECT ?1, 'dm', ?4, 0, ?2, ?3 WHERE NOT EXISTS (" +
-      "SELECT 1 FROM notifications WHERE recipient_hash = ?1 AND kind = 'dm' AND topic_id = ?4 AND (?4 > 0 OR actor_hash = ?2) AND read_at IS NULL)"
+      "SELECT 1 FROM notifications WHERE recipient_hash = ?1 AND kind = 'dm' AND topic_id = ?4 AND read_at IS NULL)"
     ).bind(toHash, fromHash, now, tid).run();
     /* Ring the notification badge only when a row was actually added (an existing
        unread 'dm' from this conversation already counts). */
