@@ -10,7 +10,7 @@ import { createHash } from "node:crypto";
 import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { build } from "esbuild";
+import { build, transformSync } from "esbuild";
 import { render } from "@lit-labs/ssr";
 import { collectResultSync } from "@lit-labs/ssr/lib/render-result.js";
 import type { Catalogue, Press, Route, Title } from "../src/types.ts";
@@ -40,10 +40,10 @@ function jpegSize(buf: Buffer): [number, number] {
   throw new Error("no JPEG frame header");
 }
 
-// Every cover in its three files (make cover), and its size scaled to the 1000-wide WebP the
+// Every cover in its five files (make cover), and its size scaled to the 1000-wide WebP the
 // page names, so each <img> holds exactly its own place while it waits to load.
 for (const t of titles) {
-  for (const f of [`${t.cover}.webp`, `${t.cover}-480.webp`, `${t.cover}.jpg`]) {
+  for (const f of [`${t.cover}.webp`, `${t.cover}-480.webp`, `${t.cover}-360.webp`, `${t.cover}-wash.webp`, `${t.cover}.jpg`]) {
     try { statSync(join(ROOT, "content/covers", f)); }
     catch { throw new Error(`${t.slug}: missing content/covers/${f} (make cover)`); }
   }
@@ -75,9 +75,10 @@ const fontName = `assets/cinzel-500-${hash(font)}.woff2`;
 writeFileSync(join(DIST, fontName), font);
 cpSync(join(FONTS, "LICENSE"), join(DIST, "assets/cinzel-OFL.txt"));
 
-const css = read("src/press.css").replaceAll("/assets/fonts/cinzel-latin-500-normal.woff2", `/${fontName}`);
-const cssName = `assets/press-${hash(css)}.css`;
-writeFileSync(join(DIST, cssName), css);
+// The stylesheet is small, so it rides in each page's head, minified: a separate file would
+// hold the first paint back for a round trip (Lighthouse's render-blocking request).
+const css = transformSync(read("src/press.css").replaceAll("/assets/fonts/cinzel-latin-500-normal.woff2", `/${fontName}`),
+  { loader: "css", minify: true }).code.trim();
 
 cpSync(join(ROOT, "content/covers"), join(DIST, "covers"), { recursive: true });
 cpSync(join(ROOT, "static"), DIST, { recursive: true });
@@ -124,7 +125,7 @@ ${headTags(meta, cat).map(([a, k, v]) => `<meta ${a}="${k}" content="${esc(v)}">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preload" href="/${fontName}" as="font" type="font/woff2" crossorigin>
 <link rel="alternate" type="application/rss+xml" title="${esc(press.name)}" href="/rss.xml">
-<link rel="stylesheet" href="/${cssName}">
+<style>${css}</style>
 <script type="module" src="/${jsName}"></script>
 </head>
 <body>
