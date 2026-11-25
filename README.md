@@ -5,6 +5,8 @@ Workers, and Lérins Press, the publishing arm's own static catalogue (`press/`,
 project, served at press.merecatholicity.com by a static-assets Worker). `main` is production and takes no direct push: every change is a pull request whose
 checks must pass, and **the merge IS the deploy** (`scripts/ship.sh` is the road).
 
+<p align="center"><a href="https://github.com/sponsors/a-schaefers"><img alt="Sponsor me on GitHub" src="https://img.shields.io/badge/Sponsor%20me-on%20GitHub-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white"></a></p>
+
 [![merecatholicity.com architecture overview: developer, source, build, CI/CD, Cloudflare edge, workers, data](docs/architecture/architecture.png)](docs/architecture/architecture.png)
 
 *The whole system on one page, from the developer's box to the reader's phone (open it for full size;
