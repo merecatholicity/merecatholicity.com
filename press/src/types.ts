@@ -47,6 +47,10 @@ export interface Title {
   format: string;
   /** ISO date the title joined the catalogue: the RSS item's date and the sitemap's lastmod. */
   listed: string;
+  /** ISO date it went on sale, set with `amazon`: the RSS item's date. The feed carries only the
+   *  titles on sale, so a subscriber hears of a book the week it can be bought, not when it is
+   *  announced as coming soon. */
+  released?: string;
   /** The paperback's Amazon page. A title without one is not out yet: it shows "Coming soon". */
   amazon?: string;
   /** The hardcover's Amazon page, where there is one. */

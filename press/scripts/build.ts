@@ -148,16 +148,27 @@ for (const route of routes) {
 }
 writeFileSync(join(DIST, "404.html"), document({ kind: "missing" }));
 
-// The sitemap: every page, with the date its newest title joined.
-const newest = titles[0]?.listed ?? "2026-11-11";
-const lastmod = (r: Route) => r.kind === "title" ? r.title.listed : newest;
+// A title on sale has both its paperback link and its release date, or neither.
+for (const t of titles)
+  if (!t.amazon !== !t.released) throw new Error(`${t.slug}: "amazon" and "released" go together`);
+
+// The sitemap: every page, with the date it last changed (a title's page changes when it goes
+// on sale).
+const changed = (t: Title) => t.released && t.released > t.listed ? t.released : t.listed;
+const newest = titles.map(changed).sort().at(-1) ?? "2026-11-11";
+const lastmod = (r: Route) => r.kind === "title" ? changed(r.title) : newest;
 writeFileSync(join(DIST, "sitemap.xml"), `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${routes.map(r => `  <url><loc>${abs(pathOf(r))}</loc><lastmod>${lastmod(r)}</lastmod></url>`).join("\n")}
 </urlset>
 `);
 
-// The feed: one item per title, newest first.
+// The feed: one item per title ON SALE, newest release first. A coming-soon title is not in it:
+// its item appears the day it goes on sale, so a subscriber is told when a book can be bought.
+// The guid names that event (#available), not the page, so a reader that saw the page under the
+// earlier feed, which carried every title, still shows the release as new.
+const onSale = titles.filter(t => t.amazon && t.released)
+  .sort((a, b) => b.released!.localeCompare(a.released!) || (a.collection?.no ?? 0) - (b.collection?.no ?? 0));
 const rfc822 = (iso: string) => new Date(`${iso}T12:00:00Z`).toUTCString().replace("GMT", "+0000");
 const item = (t: Title) => {
   const link = abs(`/titles/${t.slug}/`);
@@ -166,8 +177,8 @@ const item = (t: Title) => {
   return `  <item>
     <title>${esc(full)}</title>
     <link>${link}</link>
-    <guid isPermaLink="true">${link}</guid>
-    <pubDate>${rfc822(t.listed)}</pubDate>
+    <guid isPermaLink="false">${link}#available</guid>
+    <pubDate>${rfc822(t.released!)}</pubDate>
     <dc:creator>${esc(t.author)}</dc:creator>
     <description>${esc(metaOf({ kind: "title", title: t }, cat).description)}</description>
     <enclosure url="${abs(`/covers/${t.cover}.jpg`)}" length="${statSync(jpg).size}" type="image/jpeg"/>
@@ -180,9 +191,9 @@ writeFileSync(join(DIST, "rss.xml"), `<?xml version="1.0" encoding="UTF-8"?>
   <link>${abs("/")}</link>
   <description>${esc(press.tagline)}</description>
   <language>en</language>
-  <lastBuildDate>${rfc822(newest)}</lastBuildDate>
+  <lastBuildDate>${rfc822(onSale[0]?.released ?? newest)}</lastBuildDate>
   <atom:link href="${abs("/rss.xml")}" rel="self" type="application/rss+xml"/>
-${titles.map(item).join("\n")}
+${onSale.map(item).join("\n")}
 </channel>
 </rss>
 `);

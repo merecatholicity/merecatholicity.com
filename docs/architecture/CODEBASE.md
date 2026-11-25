@@ -49,7 +49,7 @@ press.merecatholicity.com. It is a separate static site, kept apart from the app
 own npm project and lockfile, its own `tsconfig.json` (the root one never reads it), its own
 Makefile (`run`, `build`, `check`, `cover`, `placeholders`, `brand`, `deploy`, `dry-run`). `src/views.ts` is
 every page as lit-html templates. `scripts/build.ts` renders them to HTML with `@lit-labs/ssr`,
-one prerendered page per route, plus the sitemap, RSS and 404, and `scripts/cards.ts` paints each
+one prerendered page per route, plus the sitemap, RSS (only the titles on sale, by `released`) and 404, and `scripts/cards.ts` paints each
 title's 1200x630 link-preview card (satori + resvg, fonts from npm, never the system's). `src/app.ts` hydrates that page in
 place and then navigates without reloads, `src/carousel.ts` drives Featured reads and
 `src/contact.ts` the Correspondence form (the contact worker's, Turnstile on intent). The catalogue

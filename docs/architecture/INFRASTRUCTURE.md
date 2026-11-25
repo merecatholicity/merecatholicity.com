@@ -99,6 +99,7 @@ on page one.)
 - **The press's first paint is its own, and every target is a finger's width** — `log/2026-11.md`
 - **AI crawlers are welcome: Cloudflare blocks none** — `log/2026-11.md`
 - **The press's catalogue is a file of its own, not a passenger in every page** — `log/2026-11.md`
+- **The press's RSS feed carries only the books on sale, dated the day each went on sale** — `log/2026-11.md`
 
 ### Build system
 
