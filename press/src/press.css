@@ -64,7 +64,7 @@ body {
    content. The feather is baked into the image, never a CSS mask, so it is the same
    at every window size: on a phone the whole painting is contained at the bottom; from
    900px it stands in the right margin at 88vh. */
-body::before {
+body::before, .art {
   content: "";
   position: fixed;
   /* Sized to the LARGE viewport (lvh), not inset: 0. A phone's address bar shows and
@@ -77,17 +77,28 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background: url("/art/augustine-m.webp") center bottom / contain no-repeat;
-  opacity: 0.17;
+  opacity: var(--art-op);
   filter: saturate(0.95) brightness(1.06);
+  transition: opacity var(--art-fade) ease-in-out;
 }
+:root { --art-op: 0.17; --art-fade: 3s; }
+/* The ring (src/art.ts): every fourteen seconds the next painting fades in on one of two
+   layers over the other, each placed as the main site places it. Augustine, the first, is
+   body::before's, and it fades out at the first turn. */
+.art { opacity: 0; background-image: var(--art-m); }
+.art.on { opacity: var(--art-op); }
+body.art-turns::before { opacity: 0; }
 @media (min-width: 900px) {
-  body::before {
+  :root { --art-op: 0.18; }
+  body::before, .art {
     background-image: url("/art/augustine-d.webp");
     background-position: right center;
     background-size: auto 88vh;
     background-size: auto 88lvh;
-    opacity: 0.18;
   }
+  .art { background-image: var(--art-d); }
+  /* a wide painting stands whole at the bottom right, as on merecatholicity.com */
+  .art[data-wide] { background-position: right bottom; background-size: min(58vw, 920px) auto; }
 }
 #app { min-height: 100vh; display: flex; flex-direction: column; }
 main { flex: 1; width: 100%; max-width: var(--measure); margin: 0 auto; padding: 0 var(--page-pad) 64px; }
