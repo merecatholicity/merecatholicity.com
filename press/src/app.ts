@@ -9,6 +9,7 @@ import type { Catalogue, Route } from "./types.ts";
 import { bindContact } from "./contact.ts";
 import { bindSignup } from "./signup.ts";
 import { bindCarousel } from "./carousel.ts";
+import { bindArt } from "./art.ts";
 import { SHELF_BATCH, headTags, metaOf, nav, page, routeOf, shelfOrder } from "./views.ts";
 
 const root = document.getElementById("app");
@@ -17,6 +18,7 @@ bindSignup();
 const src = root?.dataset.catalogue;
 // Not before the load: the first paint (and its largest image) has the network to itself.
 if (document.readyState !== "complete") await new Promise(r => addEventListener("load", r, { once: true }));
+bindArt();
 const cat = src
   ? await fetch(src).then(r => (r.ok ? r.json() as Promise<Catalogue> : null)).catch(() => null)
   : null;

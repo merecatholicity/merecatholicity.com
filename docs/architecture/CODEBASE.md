@@ -51,7 +51,7 @@ Makefile (`run`, `build`, `check`, `cover`, `placeholders`, `brand`, `deploy`, `
 every page as lit-html templates. `scripts/build.ts` renders them to HTML with `@lit-labs/ssr`,
 one prerendered page per route, plus the sitemap, RSS (only the titles on sale, by `released`) and 404, and `scripts/cards.ts` paints each
 title's 1200x630 link-preview card (satori + resvg, fonts from npm, never the system's). `src/app.ts` hydrates that page in
-place and then navigates without reloads, `src/carousel.ts` drives Featured reads and
+place and then navigates without reloads, `src/carousel.ts` drives Featured reads, `src/art.ts` turns the painting behind every page, and
 `src/contact.ts` the Correspondence form (the contact worker's, Turnstile on intent). The catalogue
 is data: `content/titles.json` and `content/press.json` (the featured slugs and the shelves, each
 collection with Miscellaneous last), embedded in every page; `scripts/placeholders.ts` draws a
