@@ -52,12 +52,12 @@
 /* Shelf themes (owner, 2026-11-26). A shelf may dress the whole site in its own colours while the
    reader is on it: src/theme.ts sets <html data-theme> on its page, its books' pages, and the home
    page while its covers hold the middle of the window, and src/art.ts turns the painting to the
-   shelf's own ring. The background never changes. Every colour below is a registered property, so
+   shelf's own ring. The background never changes, and nor do the borders (--rule): a fading border
+   on every chip of the filter read as a flash of light round them all (owner, 2026-11-26). Every colour below is a registered property, so
    it fades rather than jumps, and the fade is undone the same way when the reader moves on. */
 @property --accent { syntax: "<color>"; inherits: true; initial-value: #ef6b6b; }
 @property --accent-2 { syntax: "<color>"; inherits: true; initial-value: #f2827c; }
 @property --gold { syntax: "<color>"; inherits: true; initial-value: #cba36a; }
-@property --rule { syntax: "<color>"; inherits: true; initial-value: #30353b; }
 @property --ink-soft { syntax: "<color>"; inherits: true; initial-value: #d3d6d9; }
 @property --muted-c { syntax: "<color>"; inherits: true; initial-value: #a1a7ae; }
 @property --faint { syntax: "<color>"; inherits: true; initial-value: #9aa1a9; }
@@ -71,7 +71,7 @@
   --stripe-1: var(--rule); --stripe-2: var(--rule); --stripe-3: var(--rule);
   --sky: 0;
   --dot: polygon(50.0% 0.0%, 79.4% 9.5%, 97.6% 34.5%, 97.6% 65.5%, 79.4% 90.5%, 50.0% 100.0%, 20.6% 90.5%, 2.4% 65.5%, 2.4% 34.5%, 20.6% 9.5%);
-  transition: --accent 1.8s ease, --accent-2 1.8s ease, --gold 1.8s ease, --rule 1.8s ease,
+  transition: --accent 1.8s ease, --accent-2 1.8s ease, --gold 1.8s ease,
     --ink-soft 1.8s ease, --muted-c 1.8s ease, --faint 1.8s ease, --soon 1.8s ease, --soon-on 1.8s ease,
     --stripe-1 1.8s ease, --stripe-2 2.2s ease, --stripe-3 2.6s ease, --sky 2.4s ease;
 }
@@ -81,7 +81,6 @@
   --accent: #e8835f;
   --accent-2: #f2a27f;
   --gold: #e9b65a;
-  --rule: #26403f;
   --ink-soft: #efdccb;
   --muted-c: #a9bfbd;
   --faint: #a6b3b1;
