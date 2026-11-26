@@ -59,6 +59,9 @@ export interface Title {
   kindle?: string;
   /** Basename under covers/: an .avif for the page and a .jpg for feeds and link previews. */
   cover: string;
+  /** Who the front's picture is after, when its licence asks for credit (CC BY): shown under the
+   *  cover on the title's own page. `source` is the picture's page, `licenceUrl` its licence. */
+  coverCredit?: { by: string; source: string; licence: string; licenceUrl: string };
   /** The short blurb: the card and the head of the title's page. Empty until it is written: the
    *  page then shows the collection's own words. */
   lead: string[];

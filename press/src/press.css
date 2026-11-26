@@ -411,6 +411,10 @@ main > .filter:first-child { margin-top: 18px; }
 .back a:hover { color: var(--ink); }
 .book { display: grid; grid-template-columns: minmax(200px, 340px) 1fr; gap: 48px; margin-top: 20px; align-items: start; }
 .book-cover { position: sticky; top: 24px; }
+/* A picture's credit where its licence asks for one (Title.coverCredit). */
+.cover-credit { margin: 10px 0 0; font: 0.78rem/1.45 var(--font-sans); color: var(--faint); text-align: center; }
+.cover-credit a { color: var(--faint); }
+.cover-credit a:hover { color: var(--ink); }
 .book-series { margin: 0 0 10px; font: 600 0.78rem/1.5 var(--font-sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
 .book-series a { color: var(--gold); text-decoration: none; }
 .book-series a:hover { color: var(--ink); }

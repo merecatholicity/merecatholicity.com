@@ -2285,6 +2285,12 @@
     "format": "Paperback",
     "listed": "2026-11-26",
     "cover": "the-reformed-catholic-reader-1",
+    "coverCredit": {
+      "by": "Guilhem Vellut",
+      "source": "https://commons.wikimedia.org/wiki/File:Reformation_Wall_@_Parc_des_Bastions_@_Geneva_(15235727388).jpg",
+      "licence": "CC BY 2.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by/2.0/"
+    },
     "collection": {
       "slug": "lerins-reformation",
       "no": 1,
@@ -2415,6 +2421,12 @@
     "format": "Paperback",
     "listed": "2026-11-26",
     "cover": "the-reformed-catholic-reader-3",
+    "coverCredit": {
+      "by": "Fisherga",
+      "source": "https://www.flickr.com/photos/gailfisher/27769595426/",
+      "licence": "CC BY 2.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by/2.0/"
+    },
     "collection": {
       "slug": "lerins-reformation",
       "no": 3,
