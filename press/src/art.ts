@@ -36,7 +36,19 @@ const AMERICA: [name: string, wide: boolean][] = [
 const REFORMATION: [name: string, wide: boolean][] = [
   ["stgiles", true], ["rf-heidelberg", true], ["rf-mercersburg", false],
 ];
-const RINGS: Record<string, [string, boolean][]> = { "": PAINTINGS, america: AMERICA, reformation: REFORMATION };
+/** The classics ring (owner, 2026-11-26), worn by Lérins Classics, Chesterton, MacDonald and
+ *  Miscellaneous: one painting from each age the Classics shelf runs through. Raphael's School of
+ *  Athens for the ancients, Michelino's Dante (1465), Friedrich's Wanderer above the Sea of Fog,
+ *  Turner's Fighting Temeraire, Levitan's Quiet Abode (1890) and Grimshaw's Thames at Westminster
+ *  by moonlight, Chesterton's London. Cugat's Celestial Eyes (1925), the Gatsby jacket's painting,
+ *  hangs unchanging in the top left (press.css, "the Eyes"). The first is the stylesheet's. */
+const CLASSICS: [name: string, wide: boolean][] = [
+  ["cl-athens", true], ["cl-dante", true], ["cl-wanderer", false], ["cl-temeraire", true],
+  ["cl-quiet-abode", true], ["cl-thames", true],
+];
+const RINGS: Record<string, [string, boolean][]> = {
+  "": PAINTINGS, america: AMERICA, reformation: REFORMATION, classics: CLASSICS,
+};
 const TURN = 14000;
 
 const desk = matchMedia("(min-width: 900px)");
