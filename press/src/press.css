@@ -431,6 +431,14 @@ main > .filter:first-child { margin-top: 18px; }
 .share a:hover, .share button:hover { color: var(--ink); border-color: var(--muted-c); }
 .book-desc { border-top: 1px solid var(--rule); padding-top: 24px; color: var(--muted); }
 .book-desc p { margin: 0 0 18px; }
+.book-toc { border-top: 1px solid var(--rule); padding-top: 24px; margin-top: 8px; color: var(--muted); }
+.book-toc h2 {
+  font: 0.75rem var(--font-sans); letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--faint); margin: 0 0 16px;
+}
+.book-toc h3 { font-weight: normal; font-style: italic; font-size: 1rem; color: var(--ink-soft); margin: 20px 0 6px; }
+.book-toc ul { list-style: none; margin: 0 0 12px; padding: 0; }
+.book-toc li { margin: 0 0 6px; padding-left: 1.2em; text-indent: -1.2em; overflow-wrap: anywhere; }
 
 /* Plain pages. */
 .prose { max-width: 680px; margin: 48px auto 0; }
