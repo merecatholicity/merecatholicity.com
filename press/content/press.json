@@ -110,6 +110,77 @@
         "Lérins Devotions prints them to be read slowly and kept close."
       ],
       "parts": []
+    },
+    {
+      "slug": "lerins-reformation",
+      "name": "Lérins Reformation",
+      "short": "Reformation",
+      "tagline": "The Reformers, the Puritans and their heirs, in their own words",
+      "accent": "#3d5229",
+      "about": [
+        "The Reformation and its heirs in their own voice: The Reformed Catholic Reader, Calvin and the teachers of Mercersburg on the Church and the sacraments, then Luther and Calvin’s Institutes, the English Puritans, Sibbes, Baxter, Owen, Watson and Bunyan, and Spurgeon, who read them all his life.",
+        "Each claimed the old paths, the Scriptures and the Fathers. Lérins Reformation prints them whole, in their own words, so the reader may judge."
+      ],
+      "parts": [
+        {
+          "slug": "reader",
+          "name": "The Reformed Catholic Reader: Calvin and Mercersburg, 1541–1866"
+        },
+        {
+          "slug": "reformers",
+          "name": "The Reformers, 1517–1559"
+        },
+        {
+          "slug": "puritans",
+          "name": "The Puritans, 1630–1684"
+        },
+        {
+          "slug": "heirs",
+          "name": "The Puritans’ heir, 1865–1890"
+        }
+      ]
+    },
+    {
+      "slug": "lerins-america",
+      "name": "Lérins America",
+      "short": "America",
+      "tagline": "The Great Awakening and the Founding, in the original texts",
+      "accent": "#2b3f63",
+      "about": [
+        "The revival preached by Jonathan Edwards and George Whitefield, and the republic argued into being by Paine, Jefferson, Adams, Madison, Hamilton and their opponents, in the documents themselves.",
+        "Lérins America prints them whole, each in the words its first readers had."
+      ],
+      "parts": [
+        {
+          "slug": "awakening",
+          "name": "The Great Awakening, 1737–1758"
+        },
+        {
+          "slug": "founding",
+          "name": "The Founding and the Republic, 1771–1835"
+        }
+      ]
+    },
+    {
+      "slug": "lerins-schoolhouse",
+      "name": "Lérins Schoolhouse",
+      "short": "Schoolhouse",
+      "tagline": "The old American schoolbooks, for the teacher at home",
+      "accent": "#9a6a1c",
+      "about": [
+        "The books American children learned from in the one-room schoolhouse: Webster's Blue-Backed Speller, McGuffey's Eclectic Readers and Ray's Arithmetic, each whole, as the schools used them.",
+        "Lérins Schoolhouse sets them large, with a new introduction for the teacher, guides to their old sounds and measures, and answer keys to their exercises."
+      ],
+      "parts": [
+        {
+          "slug": "reading",
+          "name": "Reading and spelling"
+        },
+        {
+          "slug": "arithmetic",
+          "name": "Arithmetic"
+        }
+      ]
     }
   ],
   "privacy": [
