@@ -101,6 +101,7 @@ on page one.)
 - **The press's catalogue is a file of its own, not a passenger in every page** — `log/2026-11.md`
 - **The press's RSS feed carries only the books on sale, dated the day each went on sale** — `log/2026-11.md`
 - **The press's painting turns: all thirteen of merecatholicity.com's, one every fourteen seconds** — `log/2026-11.md`
+- **Lérins Press shelves in a reading order, and an on-sale card says so (2026-11-26)** — `log/2026-11.md`
 
 ### Build system
 
