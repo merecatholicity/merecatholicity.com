@@ -31,11 +31,19 @@ export const shelfName = (c: Collection, cat: Catalogue) =>
  *  Reformed churches its books are drawn from (owner, 2026-11-26). */
 export const THEMED: Record<string, string> = {
   "lerins-america": "america", "lerins-schoolhouse": "america", "lerins-reformation": "reformation",
-  // the classics theme (owner, 2026-11-26): the great books, and the shelves of literature beside
-  // them, Chesterton, MacDonald and Originals (whose slug is the originals' own)
-  "lerins-classics": "classics", "lerins-chesterton": "classics", "lerins-macdonald": "classics",
-  "miscellaneous": "classics",
+  // the classics theme (owner, 2026-11-26): the great books, and Originals beside them (whose slug
+  // is the originals' own)
+  "lerins-classics": "classics", "miscellaneous": "classics",
+  // three shelves with their author's portrait in the top left (owner, 2026-11-26): Newman under
+  // the press's own ring and colours, Chesterton and MacDonald under the classics' (press.css,
+  // "The corner portraits"; src/art.ts RINGS)
+  "lerins-newman": "newman", "lerins-chesterton": "chesterton", "lerins-macdonald": "macdonald",
 };
+
+/** The corner portraits, each a fixed layer the build writes after #app (scripts/build.ts) and
+ *  the stylesheet fades in under its theme: "plain" is the Deësis Christ, worn wherever no theme
+ *  is on (All, Fathers, Devotions, and the pages of no shelf). */
+export const CORNERS = ["plain", "newman", "chesterton", "macdonald"];
 
 /** A page's own theme: a themed shelf's page, or a page of one of its books. The home page has
  *  none of its own: there the shelf in view decides (src/theme.ts). */

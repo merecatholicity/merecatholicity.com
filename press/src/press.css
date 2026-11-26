@@ -114,9 +114,10 @@
 }
 /* The classics theme: the colours of Francis Cugat's Celestial Eyes (1925), the painting on the
    jacket of The Great Gatsby, which hangs in the top left: its night blue, its red lips, the gold
-   of its carnival lights. Worn by Lérins Classics, Chesterton, MacDonald and Originals; its
-   ornament is a round, the jewel of the painting's lights. */
-:root[data-theme="classics"] {
+   of its carnival lights. Worn by Lérins Classics and Originals, and by Chesterton and MacDonald,
+   which hang their author in the corner in the Eyes' place; its ornament is a round, the jewel of
+   the painting's lights. */
+:root[data-theme="classics"], :root[data-theme="chesterton"], :root[data-theme="macdonald"] {
   --accent: #e07a68;
   --accent-2: #ec9a8a;
   --gold: #e2bb62;
@@ -128,9 +129,9 @@
   --stripe-1: #2f5d8a;
   --stripe-2: #e6dcc8;
   --stripe-3: #d4604f;
-  --eyes: 1;
   --dot: circle(50% at 50% 50%);
 }
+:root[data-theme="classics"] { --eyes: 1; }
 /* The sky behind the page: the painting's gold horizon low in the window and its teal high,
    faint, fading in with the theme. */
 body::after {
@@ -201,13 +202,47 @@ html::before {
   /* the Wanderer is tall, and stands at the bottom right with the ring's wide ones */
   .art[data-name="cl-wanderer"] { background-position: right bottom; background-size: auto 82vh; background-size: auto 82lvh; }
 }
+/* The corner portraits (owner, 2026-11-26): Newman in Millais's portrait of him as a cardinal
+   (1881) on his shelf, Chesterton (E. H. Mills, 1909) and MacDonald (William Jeffrey, 1860s) on
+   theirs, and the Deësis Christ of Hagia Sophia wherever no theme is on: All, Fathers, Devotions,
+   the pages of no shelf. Each is a fixed layer the build writes after #app (CORNERS), its feather
+   baked in like the Eyes', faded in by its theme and out by the next, so scrolling the home page
+   from one shelf to the next crosses one portrait into the other. A file is named only once a page
+   has worn its theme (data-sky; "plain" for none), so no other page fetches it. */
+.corner {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100vh; height: 100lvh;
+  z-index: -1; pointer-events: none;
+  opacity: 0; transition: opacity 2.4s ease;
+  background: left top / min(72vw, 420px) auto no-repeat;
+}
+:root:not([data-theme]) .corner[data-of="plain"],
+:root[data-theme="newman"] .corner[data-of="newman"],
+:root[data-theme="chesterton"] .corner[data-of="chesterton"],
+:root[data-theme="macdonald"] .corner[data-of="macdonald"] { opacity: var(--sky-op); }
+/* Millais set Newman's head high in the canvas, where the masthead and the filter would hide it:
+   his layer hangs lower, its top edge feathered in its file like the others' right and foot. */
+.corner[data-of="newman"] { background-position: left 0 top 13vh; background-position: left 0 top 13lvh; }
+:root[data-sky~="plain"] .corner[data-of="plain"] { background-image: url("/art/pt-christ-m.webp"); }
+:root[data-sky~="newman"] .corner[data-of="newman"] { background-image: url("/art/pt-newman-m.webp"); }
+:root[data-sky~="chesterton"] .corner[data-of="chesterton"] { background-image: url("/art/pt-chesterton-m.webp"); }
+:root[data-sky~="macdonald"] .corner[data-of="macdonald"] { background-image: url("/art/pt-macdonald-m.webp"); }
+@media (min-width: 900px) {
+  .corner { background-size: auto min(86vh, 960px); background-size: auto min(86lvh, 960px); }
+  :root[data-sky~="plain"] .corner[data-of="plain"] { background-image: url("/art/pt-christ-d.webp"); }
+  :root[data-sky~="newman"] .corner[data-of="newman"] { background-image: url("/art/pt-newman-d.webp"); }
+  :root[data-sky~="chesterton"] .corner[data-of="chesterton"] { background-image: url("/art/pt-chesterton-d.webp"); }
+  :root[data-sky~="macdonald"] .corner[data-of="macdonald"] { background-image: url("/art/pt-macdonald-d.webp"); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .corner { transition: none; }
+}
 /* The ring's first painting on a themed shelf's own pages (src/art.ts names the ring). */
 :root[data-art="america"] body::before { background-image: url("/art/am-meetinghouse-m.webp"); }
 :root[data-art="reformation"] body::before { background-image: url("/art/stgiles-m.webp"); }
-:root[data-art="classics"] body::before { background-image: url("/art/cl-athens-m.webp"); }
+:root:is([data-art="classics"], [data-art="chesterton"], [data-art="macdonald"]) body::before { background-image: url("/art/cl-athens-m.webp"); }
 @media (min-width: 900px) {
   :root[data-art="america"] body::before { background-image: url("/art/am-meetinghouse-d.webp"); }
-  :root[data-art="classics"] body::before {
+  :root:is([data-art="classics"], [data-art="chesterton"], [data-art="macdonald"]) body::before {
     background-image: url("/art/cl-athens-d.webp");
     background-position: right bottom; background-size: min(58vw, 920px) auto;
   }
@@ -227,7 +262,7 @@ section.collection[data-theme="reformation"] .collection-head::before {
   background: var(--gold); clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
 }
 /* and the classics shelves' heads a round, the ornament of the theme */
-section.collection[data-theme="classics"] .collection-head::before {
+section.collection:is([data-theme="classics"], [data-theme="chesterton"], [data-theme="macdonald"]) .collection-head::before {
   content: ""; display: inline-block; width: 0.5em; height: 0.5em; margin: 0 0.44em 0.12em 0;
   background: var(--gold); border-radius: 50%;
 }

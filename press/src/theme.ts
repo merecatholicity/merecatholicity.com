@@ -21,8 +21,10 @@ function setTheme(name?: string) {
   // the corner painting's file, named once and kept, so it can still fade out after the theme:
   // each theme's own, a list, so scrolling from one themed shelf to the next fades one corner out
   // as the other fades in
-  if (name && !(root.dataset.sky ?? "").split(" ").includes(name))
-    root.dataset.sky = [root.dataset.sky, name].filter(Boolean).join(" ");
+  // and no theme is "plain", whose corner (the Deësis) is named the same way
+  const sky = name ?? "plain";
+  if (!(root.dataset.sky ?? "").split(" ").includes(sky))
+    root.dataset.sky = [root.dataset.sky, sky].filter(Boolean).join(" ");
   // With no motion the ring never turns, so the stylesheet's own painting is changed instead.
   if (still) {
     if (name) root.dataset.art = name;

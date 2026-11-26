@@ -102,6 +102,7 @@ on page one.)
 - **The press's RSS feed carries only the books on sale, dated the day each went on sale** — `log/2026-11.md`
 - **The press's painting turns: all thirteen of merecatholicity.com's, one every fourteen seconds** — `log/2026-11.md`
 - **Lérins Press shelves in a reading order, and an on-sale card says so (2026-11-26)** — `log/2026-11.md`
+- **Lérins Press: a portrait fixed in the top left of every shelf (2026-11-26)** — `log/2026-11.md`
 
 ### Build system
 

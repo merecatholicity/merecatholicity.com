@@ -14,9 +14,11 @@
 // that ring's first painting.
 
 /** Each painting, by its files' name under static/art/, and whether it is wide (it then stands
- *  at the bottom right on a desktop, not in the right margin). Augustine first: the stylesheet's. */
+ *  at the bottom right on a desktop, not in the right margin). Augustine first: the stylesheet's.
+ *  The Deësis Christ, once second, hangs fixed in the top left instead (owner, 2026-11-26; press.css
+ *  "The corner portraits"), so the ring is twelve. */
 const PAINTINGS: [name: string, wide: boolean][] = [
-  ["augustine", false], ["feed", false], ["community", true], ["inbox", false],
+  ["augustine", false], ["community", true], ["inbox", false],
   ["hagia", true], ["credo", false], ["peter", true], ["profile", false],
   ["merecat", true], ["lexorandi", false], ["geneva", true], ["luther", false],
   ["stgiles", true],
@@ -48,6 +50,9 @@ const CLASSICS: [name: string, wide: boolean][] = [
 ];
 const RINGS: Record<string, [string, boolean][]> = {
   "": PAINTINGS, america: AMERICA, reformation: REFORMATION, classics: CLASSICS,
+  // the portrait shelves keep the ring they wore before their portraits: the same array, so
+  // scrolling between them and their neighbours never restarts it (setRing)
+  newman: PAINTINGS, chesterton: CLASSICS, macdonald: CLASSICS,
 };
 const TURN = 14000;
 
