@@ -423,7 +423,10 @@ function titlePage(t: Title, cat: Catalogue): TemplateResult {
       <a href=${pathOf({ kind: "collection", collection: shelf })}>Back to ${shelfName(shelf, cat)}</a>
     </nav>
     <article class="book">
-      <div class="book-cover">${cover(t, "(max-width: 720px) 70vw, 340px", true)}</div>
+      <div class="book-cover">${cover(t, "(max-width: 720px) 70vw, 340px", true)}${t.coverCredit ? html`
+        <p class="cover-credit">Front after <a href=${t.coverCredit.source} rel="noopener" target="_blank">a photograph</a>
+          by ${t.coverCredit.by}, <a href=${t.coverCredit.licenceUrl} rel="license noopener" target="_blank">${
+          t.coverCredit.licence}</a>, adapted.</p>` : nothing}</div>
       <div class="book-text">
         ${c ? html`<p class="book-series"><a href=${pathOf({ kind: "collection", collection: c })}>${seriesLine(t, cat)}</a>${
           partName(t, cat) ? html`<span> · ${partName(t, cat)}</span>` : nothing}</p>` : nothing}
