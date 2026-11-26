@@ -25,8 +25,10 @@ export const shelfName = (c: Collection, cat: Catalogue) =>
   c === cat.press.originals ? c.name : `${c.name} Collection`;
 
 /** The shelves that dress the site in their own colours while the reader is on them (src/theme.ts,
- *  press.css "Shelf themes"), by collection slug. */
-export const THEMED: Record<string, string> = { "lerins-america": "america" };
+ *  press.css "Shelf themes"), by collection slug. Lérins Schoolhouse, the old American
+ *  schoolbooks, wears America's (owner, 2026-11-26), so scrolling from one shelf to the next
+ *  never leaves the theme. */
+export const THEMED: Record<string, string> = { "lerins-america": "america", "lerins-schoolhouse": "america" };
 
 /** A page's own theme: a themed shelf's page, or a page of one of its books. The home page has
  *  none of its own: there the shelf in view decides (src/theme.ts). */
