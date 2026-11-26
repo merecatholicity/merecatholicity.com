@@ -3267,5 +3267,27 @@
       "Northanger Abbey follows Catherine Morland, a young reader of Gothic novels, on her first visit to Bath and then to the abbey of the Tilney family, where she imagines dark secrets. Persuasion is the story of Anne Elliot, who at nineteen was persuaded to break her engagement to a young naval officer without fortune, Frederick Wentworth, and who meets him again eight years later, now a rich captain, in Somerset and at Bath.",
       "No. 18 of Lérins Classics, in the collection’s third part, From Milton to the Romantics, prints the two novels whole, as they were first published together, with Henry Austen’s Biographical Notice of the Author. The Editors of the Mere Catholicity Project add a new introduction on the last years of Austen’s life, and explanatory notes on the Navy after the wars with France, Bath and its society, the Gothic novels Catherine reads, and the words whose sense has moved."
     ]
+  },
+  {
+    "slug": "frankenstein",
+    "title": "Frankenstein",
+    "subtitle": "or, The Modern Prometheus",
+    "author": "Mary Shelley",
+    "format": "Paperback",
+    "listed": "2026-11-26",
+    "cover": "frankenstein",
+    "collection": {
+      "slug": "lerins-classics",
+      "no": 19,
+      "part": "romantics"
+    },
+    "lead": [
+      "Mary Shelley’s novel of the student who makes a living man, in its first text of 1818."
+    ],
+    "description": [
+      "Mary Wollstonecraft Godwin was born in London in 1797, the daughter of the philosopher William Godwin and of Mary Wollstonecraft, who died days after her birth. At sixteen she left England with the poet Percy Bysshe Shelley, whom she married in 1816. That summer, beside Lake Geneva in the company of Lord Byron, a contest to write ghost stories gave her the idea for Frankenstein. It was published anonymously in three volumes in January 1818, when she was twenty.",
+      "In letters home, an English explorer in the Arctic tells of a stranger he has taken aboard his ship. The stranger is Victor Frankenstein of Geneva, who as a student at Ingolstadt discovered how to give life to dead matter, made a man, and abandoned the creature in horror. The creature tells his own story, of how he learned to speak and read and was driven off by everyone he met, and of his revenge on his maker.",
+      "No. 19 of Lérins Classics, in the collection’s third part, From Milton to the Romantics, prints Frankenstein whole in its first text of 1818. The Editors of the Mere Catholicity Project add a new introduction on Mary Shelley, her circle and the summer of 1816, and explanatory notes on the science of galvanism and anatomy the novel draws on, the books the creature reads, and the places of the story."
+    ]
   }
 ]
