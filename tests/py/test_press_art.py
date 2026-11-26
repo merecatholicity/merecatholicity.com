@@ -17,7 +17,7 @@ class PressArt(unittest.TestCase):
         """Each ring a shelf may turn to (Lérins America's and Lérins Reformation's, 2026-11-26) is
         held to the same rule, and its first painting is the stylesheet's."""
         css = (PRESS / "src/press.css").read_text(encoding="utf-8")
-        for ring in ("AMERICA", "REFORMATION"):
+        for ring in ("AMERICA", "REFORMATION", "CLASSICS"):
             block = re.search(rf"const {ring}[^=]*=\s*\[(.*?)\];", ART, re.S).group(1)
             names = re.findall(r'\["([a-z-]+)",\s*(?:true|false)\]', block)
             self.assertGreater(len(names), 1, ring)
@@ -26,8 +26,8 @@ class PressArt(unittest.TestCase):
                     self.assertTrue((PRESS / f"static/art/{n}-{size}.webp").is_file(), f"{n}-{size}.webp")
             self.assertIn(f"/art/{names[0]}-m.webp", css)
             self.assertIn(f"/art/{names[0]}-d.webp", css)
-        # the corner paintings, outside the rings: America's sky, Geneva's Wall (2026-11-26)
-        for corner in ("am-sky", "geneva"):
+        # the corner paintings, outside the rings: America's sky, Geneva's Wall, Cugat's Eyes (2026-11-26)
+        for corner in ("am-sky", "geneva", "cl-eyes"):
             for size in ("d", "m"):
                 self.assertTrue((PRESS / f"static/art/{corner}-{size}.webp").is_file())
                 self.assertIn(f"/art/{corner}-{size}.webp", css)

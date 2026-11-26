@@ -68,13 +68,14 @@
 @property --stripe-3 { syntax: "<color>"; inherits: true; initial-value: #30353b; }
 @property --sky { syntax: "<number>"; inherits: true; initial-value: 0; }
 @property --wall { syntax: "<number>"; inherits: true; initial-value: 0; }
+@property --eyes { syntax: "<number>"; inherits: true; initial-value: 0; }
 :root {
   --stripe-1: var(--rule); --stripe-2: var(--rule); --stripe-3: var(--rule);
-  --sky: 0; --wall: 0;
+  --sky: 0; --wall: 0; --eyes: 0;
   --dot: polygon(50.0% 0.0%, 79.4% 9.5%, 97.6% 34.5%, 97.6% 65.5%, 79.4% 90.5%, 50.0% 100.0%, 20.6% 90.5%, 2.4% 65.5%, 2.4% 34.5%, 20.6% 9.5%);
   transition: --accent 1.8s ease, --accent-2 1.8s ease, --gold 1.8s ease,
     --ink-soft 1.8s ease, --muted-c 1.8s ease, --faint 1.8s ease, --soon 1.8s ease, --soon-on 1.8s ease,
-    --stripe-1 1.8s ease, --stripe-2 2.2s ease, --stripe-3 2.6s ease, --sky 2.4s ease, --wall 2.4s ease;
+    --stripe-1 1.8s ease, --stripe-2 2.2s ease, --stripe-3 2.6s ease, --sky 2.4s ease, --wall 2.4s ease, --eyes 2.4s ease;
 }
 /* Lérins America: the colours of Frederic Edwin Church's Our Banner in the Sky (c. 1861), the
    ring's first painting: its coral stripes, its cream, its teal canton, its gold horizon. */
@@ -110,6 +111,25 @@
   --stripe-3: #b65a4c;
   --wall: 1;
   --dot: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+/* The classics theme: the colours of Francis Cugat's Celestial Eyes (1925), the painting on the
+   jacket of The Great Gatsby, which hangs in the top left: its night blue, its red lips, the gold
+   of its carnival lights. Worn by Lérins Classics, Chesterton, MacDonald and Miscellaneous; its
+   ornament is a round, the jewel of the painting's lights. */
+:root[data-theme="classics"] {
+  --accent: #e07a68;
+  --accent-2: #ec9a8a;
+  --gold: #e2bb62;
+  --ink-soft: #dde2e9;
+  --muted-c: #a5b4c6;
+  --faint: #9eacbd;
+  --soon: #d4604f;
+  --soon-on: #2a0f0c;
+  --stripe-1: #2f5d8a;
+  --stripe-2: #e6dcc8;
+  --stripe-3: #d4604f;
+  --eyes: 1;
+  --dot: circle(50% at 50% 50%);
 }
 /* The sky behind the page: the painting's gold horizon low in the window and its teal high,
    faint, fading in with the theme. */
@@ -162,11 +182,35 @@ body::after {
   /* Mercersburg's chapel is tall, and stands at the bottom right with the ring's wide ones */
   .art[data-name="rf-mercersburg"] { background-position: right bottom; background-size: auto 78vh; background-size: auto 78lvh; }
 }
+/* The Eyes: Cugat's Celestial Eyes stays in the top left while the classics theme is on, never
+   turning with the ring, its feather baked in (cl-eyes-*: whole at the corner, gone by the right
+   and the foot), fading by its own --eyes. The two corners above are #app's; this one is <html>'s,
+   painted before the body, under the ring, which keeps to the right. Named only once a page has
+   been in the theme (data-sky), like the others. */
+html::before {
+  content: "";
+  position: fixed; top: 0; left: 0; width: 100%; height: 100vh; height: 100lvh;
+  z-index: -1; pointer-events: none;
+  opacity: calc(var(--eyes) * var(--sky-op) * 0.8);
+  background: left top / min(72vw, 420px) auto no-repeat;
+}
+:root[data-sky~="classics"]::before { background-image: url("/art/cl-eyes-m.webp"); }
+@media (min-width: 900px) {
+  html::before { background-size: auto min(86vh, 960px); background-size: auto min(86lvh, 960px); }
+  :root[data-sky~="classics"]::before { background-image: url("/art/cl-eyes-d.webp"); }
+  /* the Wanderer is tall, and stands at the bottom right with the ring's wide ones */
+  .art[data-name="cl-wanderer"] { background-position: right bottom; background-size: auto 82vh; background-size: auto 82lvh; }
+}
 /* The ring's first painting on a themed shelf's own pages (src/art.ts names the ring). */
 :root[data-art="america"] body::before { background-image: url("/art/am-meetinghouse-m.webp"); }
 :root[data-art="reformation"] body::before { background-image: url("/art/stgiles-m.webp"); }
+:root[data-art="classics"] body::before { background-image: url("/art/cl-athens-m.webp"); }
 @media (min-width: 900px) {
   :root[data-art="america"] body::before { background-image: url("/art/am-meetinghouse-d.webp"); }
+  :root[data-art="classics"] body::before {
+    background-image: url("/art/cl-athens-d.webp");
+    background-position: right bottom; background-size: min(58vw, 920px) auto;
+  }
   :root[data-art="reformation"] body::before {
     background-image: url("/art/stgiles-d.webp");
     background-position: right bottom; background-size: min(58vw, 920px) auto;
@@ -181,6 +225,11 @@ section.collection[data-theme="america"] .collection-head::before {
 section.collection[data-theme="reformation"] .collection-head::before {
   content: ""; display: inline-block; width: 0.56em; height: 0.56em; margin: 0 0.42em 0.1em 0;
   background: var(--gold); clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+/* and the classics shelves' heads a round, the ornament of the theme */
+section.collection[data-theme="classics"] .collection-head::before {
+  content: ""; display: inline-block; width: 0.5em; height: 0.5em; margin: 0 0.44em 0.12em 0;
+  background: var(--gold); border-radius: 50%;
 }
 @media (prefers-reduced-motion: reduce) {
   :root { transition: none; }

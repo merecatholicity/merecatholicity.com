@@ -31,13 +31,18 @@ export const shelfName = (c: Collection, cat: Catalogue) =>
  *  Reformed churches its books are drawn from (owner, 2026-11-26). */
 export const THEMED: Record<string, string> = {
   "lerins-america": "america", "lerins-schoolhouse": "america", "lerins-reformation": "reformation",
+  // the classics theme (owner, 2026-11-26): the great books, and the shelves of literature beside
+  // them, Chesterton, MacDonald and Miscellaneous (whose slug is the originals' own)
+  "lerins-classics": "classics", "lerins-chesterton": "classics", "lerins-macdonald": "classics",
+  "miscellaneous": "classics",
 };
 
 /** A page's own theme: a themed shelf's page, or a page of one of its books. The home page has
  *  none of its own: there the shelf in view decides (src/theme.ts). */
 export function themeOf(route: Route): string | undefined {
   if (route.kind === "collection") return THEMED[route.collection.slug];
-  if (route.kind === "title") return route.title.collection && THEMED[route.title.collection.slug];
+  // a book with no collection stands on Miscellaneous
+  if (route.kind === "title") return THEMED[route.title.collection?.slug ?? "miscellaneous"];
   return undefined;
 }
 
