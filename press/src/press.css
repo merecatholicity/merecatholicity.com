@@ -67,13 +67,14 @@
 @property --stripe-2 { syntax: "<color>"; inherits: true; initial-value: #30353b; }
 @property --stripe-3 { syntax: "<color>"; inherits: true; initial-value: #30353b; }
 @property --sky { syntax: "<number>"; inherits: true; initial-value: 0; }
+@property --wall { syntax: "<number>"; inherits: true; initial-value: 0; }
 :root {
   --stripe-1: var(--rule); --stripe-2: var(--rule); --stripe-3: var(--rule);
-  --sky: 0;
+  --sky: 0; --wall: 0;
   --dot: polygon(50.0% 0.0%, 79.4% 9.5%, 97.6% 34.5%, 97.6% 65.5%, 79.4% 90.5%, 50.0% 100.0%, 20.6% 90.5%, 2.4% 65.5%, 2.4% 34.5%, 20.6% 9.5%);
   transition: --accent 1.8s ease, --accent-2 1.8s ease, --gold 1.8s ease,
     --ink-soft 1.8s ease, --muted-c 1.8s ease, --faint 1.8s ease, --soon 1.8s ease, --soon-on 1.8s ease,
-    --stripe-1 1.8s ease, --stripe-2 2.2s ease, --stripe-3 2.6s ease, --sky 2.4s ease;
+    --stripe-1 1.8s ease, --stripe-2 2.2s ease, --stripe-3 2.6s ease, --sky 2.4s ease, --wall 2.4s ease;
 }
 /* Lérins America: the colours of Frederic Edwin Church's Our Banner in the Sky (c. 1861), the
    ring's first painting: its coral stripes, its cream, its teal canton, its gold horizon. */
@@ -91,6 +92,24 @@
   --stripe-3: #de7856;
   --sky: 1;
   --dot: polygon(50.0% 0.0%, 61.8% 33.8%, 97.6% 34.5%, 69.0% 56.2%, 79.4% 90.5%, 50.0% 70.0%, 20.6% 90.5%, 31.0% 56.2%, 2.4% 34.5%, 38.2% 33.8%);
+}
+/* Lérins Reformation: the colours of its churches. The slate of St Giles' and Geneva's stone, the
+   red sandstone of Heidelberg's Church of the Holy Spirit, and the crimson and gold of the
+   Reformed Catholic Reader's fronts; its ornament is their diamond. */
+:root[data-theme="reformation"] {
+  --accent: #d98c7a;
+  --accent-2: #e9a796;
+  --gold: #cdb27c;
+  --ink-soft: #e4dccd;
+  --muted-c: #a9b2bc;
+  --faint: #a0a8b1;
+  --soon: #c8685c;
+  --soon-on: #26100d;
+  --stripe-1: #5d6d7e;
+  --stripe-2: #ddd3c1;
+  --stripe-3: #b65a4c;
+  --wall: 1;
+  --dot: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
 }
 /* The sky behind the page: the painting's gold horizon low in the window and its teal high,
    faint, fading in with the theme. */
@@ -117,21 +136,51 @@ body::after {
   filter: saturate(0.95) brightness(1.06);
 }
 :root { --sky-op: 0.2; }
-:root[data-sky="america"] #app::before { background-image: url("/art/am-sky-m.webp"); }
+:root[data-sky~="america"] #app::before { background-image: url("/art/am-sky-m.webp"); }
 @media (min-width: 900px) {
   :root { --sky-op: 0.22; }
   #app::before { background-size: min(68vw, 1250px) auto; }
-  :root[data-sky="america"] #app::before { background-image: url("/art/am-sky-d.webp"); }
+  :root[data-sky~="america"] #app::before { background-image: url("/art/am-sky-d.webp"); }
+}
+/* The Wall: the Reformation Wall at Geneva, as merecatholicity.com's Free Churches page hangs it,
+   stays in the top left while Lérins Reformation's theme is on, never turning with the ring, and
+   fades in and out by its own --wall, so the step from this shelf to America's (the next on the
+   home page) fades one corner out as the other comes in. Named only once a page has been in the
+   theme (data-sky), like the sky. */
+#app::after {
+  content: "";
+  position: fixed; top: 0; left: 0; width: 100%; height: 100vh; height: 100lvh;
+  z-index: -1; pointer-events: none;
+  opacity: calc(var(--wall) * var(--sky-op));
+  background: left top / min(100vw, 760px) auto no-repeat;
+  filter: saturate(0.95) brightness(1.06);
+}
+:root[data-sky~="reformation"] #app::after { background-image: url("/art/geneva-m.webp"); }
+@media (min-width: 900px) {
+  #app::after { background-size: min(50vw, 760px) auto; }
+  :root[data-sky~="reformation"] #app::after { background-image: url("/art/geneva-d.webp"); }
+  /* Mercersburg's chapel is tall, and stands at the bottom right with the ring's wide ones */
+  .art[data-name="rf-mercersburg"] { background-position: right bottom; background-size: auto 78vh; background-size: auto 78lvh; }
 }
 /* The ring's first painting on a themed shelf's own pages (src/art.ts names the ring). */
 :root[data-art="america"] body::before { background-image: url("/art/am-meetinghouse-m.webp"); }
+:root[data-art="reformation"] body::before { background-image: url("/art/stgiles-m.webp"); }
 @media (min-width: 900px) {
   :root[data-art="america"] body::before { background-image: url("/art/am-meetinghouse-d.webp"); }
+  :root[data-art="reformation"] body::before {
+    background-image: url("/art/stgiles-d.webp");
+    background-position: right bottom; background-size: min(58vw, 920px) auto;
+  }
 }
 /* The shelf's own head on the home page carries a star, always: the hint of what lies there. */
 section.collection[data-theme="america"] .collection-head::before {
   content: ""; display: inline-block; width: 0.62em; height: 0.62em; margin: 0 0.4em 0.08em 0;
   background: var(--gold); clip-path: polygon(50.0% 0.0%, 61.8% 33.8%, 97.6% 34.5%, 69.0% 56.2%, 79.4% 90.5%, 50.0% 70.0%, 20.6% 90.5%, 31.0% 56.2%, 2.4% 34.5%, 38.2% 33.8%);
+}
+/* and Lérins Reformation's head a diamond, the ornament of its fronts */
+section.collection[data-theme="reformation"] .collection-head::before {
+  content: ""; display: inline-block; width: 0.56em; height: 0.56em; margin: 0 0.42em 0.1em 0;
+  background: var(--gold); clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
 }
 @media (prefers-reduced-motion: reduce) {
   :root { transition: none; }

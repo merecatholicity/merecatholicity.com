@@ -28,7 +28,15 @@ const AMERICA: [name: string, wide: boolean][] = [
   ["am-meetinghouse", false], ["am-whitefield", true], ["am-statehouse", false],
   ["am-declaration", true], ["am-eagle", false], ["am-capitol", false], ["am-basilica", false],
 ];
-const RINGS: Record<string, [string, boolean][]> = { "": PAINTINGS, america: AMERICA };
+/** Lérins Reformation's ring (owner, 2026-11-26): St Giles', Edinburgh, as merecatholicity.com's
+ *  Free Churches page hangs it, then the Church of the Holy Spirit at Heidelberg and the chapel at
+ *  Mercersburg, the churches of the Reformed Catholic Reader's fronts. All three stand at the
+ *  bottom right; the Reformation Wall, Geneva, hangs unchanging in the top left (press.css,
+ *  "the Wall"). The first is the stylesheet's. */
+const REFORMATION: [name: string, wide: boolean][] = [
+  ["stgiles", true], ["rf-heidelberg", true], ["rf-mercersburg", false],
+];
+const RINGS: Record<string, [string, boolean][]> = { "": PAINTINGS, america: AMERICA, reformation: REFORMATION };
 const TURN = 14000;
 
 const desk = matchMedia("(min-width: 900px)");
@@ -57,6 +65,7 @@ function show(i: number) {
   next.style.setProperty("--art-m", `url(/art/${name}-m.webp)`);
   next.style.setProperty("--art-d", `url(/art/${name}-d.webp)`);
   next.toggleAttribute("data-wide", wide);
+  next.dataset.name = name;        // a painting with a place of its own (press.css)
   next.classList.add("on");
   if (first) document.body.classList.add("art-turns");   // the stylesheet's painting fades out
   else layers[top].classList.remove("on");
