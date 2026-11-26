@@ -14,7 +14,7 @@
   "about": [
     "Lérins is a small island off the coast of Cannes. Early in the fifth century Honoratus founded a monastery there, and it became a school for the Church in Gaul. Bishops came out of it, Hilary of Arles, Eucherius of Lyon, Lupus of Troyes and Caesarius of Arles among them, and so did books.",
     "One of its monks, Vincent, wrote a short book in 434 for telling the faith of the Church from the novelties pressed on it. His rule is the one this house takes its name from. Hold to what has been believed everywhere, always, and by all.",
-    "Lérins Press is the publishing arm of merecatholicity.com. It prints paperbacks of the books written there, and in time careful editions of the classics the site already keeps free to read online."
+    "Lérins Press is the publishing arm of merecatholicity.com. It publishes the books written there, and in time careful editions of the classics the site already keeps free to read online."
   ],
   "social": [],
   "featured": [
@@ -124,7 +124,7 @@
       "parts": [
         {
           "slug": "reader",
-          "name": "The Reformed Catholic Reader: Calvin and Mercersburg, 1541–1866"
+          "name": "The Reformed Catholic Reader"
         },
         {
           "slug": "reformers",

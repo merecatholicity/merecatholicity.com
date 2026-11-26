@@ -1,5 +1,5 @@
 // A link-preview card per title, 1200x630: the cover on the press's dark ground, beside the
-// press's name in Cinzel, the title, the subtitle and the editions. The build makes one for
+// press's name in Cinzel, the title, the subtitle and the author. The build makes one for
 // every entry in content/titles.json, so a new book needs nothing beyond its entry and its cover.
 //
 // A cover alone is a poor preview: it is portrait, and X, Facebook, iMessage and Discord crop
@@ -13,7 +13,7 @@ import { join } from "node:path";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 import jpeg from "jpeg-js";
-import { editions, type Press, type Title } from "../src/types.ts";
+import type { Press, Title } from "../src/types.ts";
 
 export const CARD_W = 1200;
 export const CARD_H = 630;
@@ -63,7 +63,7 @@ export function cardMaker(root: string, press: Press) {
         lineHeight: 1.3, color: SOFT, marginTop: 18 }, t.subtitle)] : []),
       rule,
       el("div", { fontFamily: "Gelasio", fontSize: 26, color: SOFT },
-        !t.amazon ? "Paperback and Kindle · Coming soon" : editions(t)));
+        [t.author, t.amazon ? "" : "Coming soon"].filter(Boolean).join(" · ")));
     const card = el("div", { width: CARD_W, height: CARD_H, display: "flex", alignItems: "center",
       padding: "0 72px 0 64px",
       backgroundColor: "#0f1113",

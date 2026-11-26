@@ -2,7 +2,7 @@
 // server (@lit-labs/ssr), and the browser renders the same templates when it navigates,
 // so the first paint and every later one come from one source.
 import { html, nothing, type TemplateResult } from "lit";
-import { editions, type Catalogue, type Collection, type Route, type Title } from "./types.ts";
+import { type Catalogue, type Collection, type Route, type Title } from "./types.ts";
 
 /** The shelf draws this many cards at first, and this many more each time the reader nears
  *  its end (app.ts watches for that), so a long catalogue costs a phone only what it shows. */
@@ -23,6 +23,20 @@ export function seriesLine(t: Title, cat: Catalogue): string | undefined {
  *  books, "Lérins Newman · No. 31"). The books in no collection are Miscellaneous. */
 export const shelfName = (c: Collection, cat: Catalogue) =>
   c === cat.press.originals ? c.name : `${c.name} Collection`;
+
+/** The shelves that dress the site in their own colours while the reader is on them (src/theme.ts,
+ *  press.css "Shelf themes"), by collection slug. Lérins Schoolhouse, the old American
+ *  schoolbooks, wears America's (owner, 2026-11-26), so scrolling from one shelf to the next
+ *  never leaves the theme. */
+export const THEMED: Record<string, string> = { "lerins-america": "america", "lerins-schoolhouse": "america" };
+
+/** A page's own theme: a themed shelf's page, or a page of one of its books. The home page has
+ *  none of its own: there the shelf in view decides (src/theme.ts). */
+export function themeOf(route: Route): string | undefined {
+  if (route.kind === "collection") return THEMED[route.collection.slug];
+  if (route.kind === "title") return route.title.collection && THEMED[route.title.collection.slug];
+  return undefined;
+}
 
 /** Every shelf of the catalogue, in order: each collection, then Miscellaneous last. */
 export const shelves = (cat: Catalogue): Collection[] => [...cat.press.collections, cat.press.originals];
@@ -257,7 +271,7 @@ function collectionShelf(c: Collection, cat: Catalogue, placed: Placed[], named:
   const mine = placed.filter(({ t }) => belongs(t, c, cat));
   if (!mine.length) return nothing;
   const run = (cards: Placed[]) => html`<ul class="shelf">${cards.map(({ t, i }) => card(t, i))}</ul>`;
-  return html`<section class="collection" aria-labelledby="c-${c.slug}">
+  return html`<section class="collection" aria-labelledby="c-${c.slug}" data-theme=${THEMED[c.slug] ?? nothing}>
     ${named ? html`<h3 class="collection-head" id="c-${c.slug}">
       <a href=${pathOf({ kind: "collection", collection: c })}>${name}</a></h3>
       <p class="collection-tag">${c.tagline}</p>` : nothing}
@@ -415,7 +429,7 @@ function titlePage(t: Title, cat: Catalogue): TemplateResult {
           partName(t, cat) ? html`<span> · ${partName(t, cat)}</span>` : nothing}</p>` : nothing}
         <h1 tabindex="-1">${t.title}</h1>
         ${t.subtitle ? html`<p class="book-sub">${t.subtitle}</p>` : nothing}
-        <p class="book-by">${t.author ? `${t.author} · ` : ""}${!t.amazon ? "Paperback and Kindle" : editions(t)}</p>
+        ${t.author ? html`<p class="book-by">${t.author}</p>` : nothing}
         ${!t.lead.length || t.description[0]?.startsWith(t.lead[0]) ? nothing
           : html`<div class="book-lead">${t.lead.map(p => html`<p>${p}</p>`)}</div>`}
         <p class="actions">

@@ -88,8 +88,3 @@ export type Route =
   | { kind: "title"; title: Title }
   | { kind: "missing" };
 
-/** "Paperback, Hardcover and Kindle": the editions out, as the head of a title's page says them. */
-export const editions = (t: Title) => {
-  const all = [t.format, ...(t.hardcover ? ["Hardcover"] : []), ...(t.kindle ? ["Kindle"] : [])];
-  return all.length > 1 ? `${all.slice(0, -1).join(", ")} and ${all[all.length - 1]}` : all[0];
-};

@@ -10,6 +10,7 @@ import { bindContact } from "./contact.ts";
 import { bindSignup } from "./signup.ts";
 import { bindCarousel } from "./carousel.ts";
 import { bindArt } from "./art.ts";
+import { bindTheme } from "./theme.ts";
 import { SHELF_BATCH, headTags, metaOf, nav, page, routeOf, shelfOrder } from "./views.ts";
 
 const root = document.getElementById("app");
@@ -46,6 +47,7 @@ if (cat && root) {
 
   const watch = () => {
     bindCarousel(root);
+    bindTheme(root, routeOf(path, cat));
     more.disconnect();
     const marker = root.querySelector(".shelf-more");
     if (marker) more.observe(marker);

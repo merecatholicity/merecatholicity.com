@@ -13,6 +13,22 @@ ART = (PRESS / "src/art.ts").read_text(encoding="utf-8")
 
 
 class PressArt(unittest.TestCase):
+    def test_every_ring_has_both_files(self):
+        """Each ring a shelf may turn to (Lérins America's, 2026-11-26) is held to the same rule."""
+        block = re.search(r"const AMERICA[^=]*=\s*\[(.*?)\];", ART, re.S).group(1)
+        names = re.findall(r'\["([a-z-]+)",\s*(?:true|false)\]', block)
+        self.assertGreater(len(names), 1)
+        for n in names:
+            for size in ("d", "m"):
+                self.assertTrue((PRESS / f"static/art/{n}-{size}.webp").is_file(), f"{n}-{size}.webp")
+        css = (PRESS / "src/press.css").read_text(encoding="utf-8")
+        self.assertIn(f"/art/{names[0]}-m.webp", css)
+        self.assertIn(f"/art/{names[0]}-d.webp", css)
+        # the corner painting, outside the ring (2026-11-26)
+        for size in ("d", "m"):
+            self.assertTrue((PRESS / f"static/art/am-sky-{size}.webp").is_file())
+            self.assertIn(f"/art/am-sky-{size}.webp", css)
+
     def test_every_painting_has_both_files(self):
         block = re.search(r"const PAINTINGS[^=]*=\s*\[(.*?)\];", ART, re.S).group(1)
         names = re.findall(r'\["([a-z-]+)",\s*(?:true|false)\]', block)
