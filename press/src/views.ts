@@ -24,6 +24,18 @@ export function seriesLine(t: Title, cat: Catalogue): string | undefined {
 export const shelfName = (c: Collection, cat: Catalogue) =>
   c === cat.press.originals ? c.name : `${c.name} Collection`;
 
+/** The shelves that dress the site in their own colours while the reader is on them (src/theme.ts,
+ *  press.css "Shelf themes"), by collection slug. */
+export const THEMED: Record<string, string> = { "lerins-america": "america" };
+
+/** A page's own theme: a themed shelf's page, or a page of one of its books. The home page has
+ *  none of its own: there the shelf in view decides (src/theme.ts). */
+export function themeOf(route: Route): string | undefined {
+  if (route.kind === "collection") return THEMED[route.collection.slug];
+  if (route.kind === "title") return route.title.collection && THEMED[route.title.collection.slug];
+  return undefined;
+}
+
 /** Every shelf of the catalogue, in order: each collection, then Miscellaneous last. */
 export const shelves = (cat: Catalogue): Collection[] => [...cat.press.collections, cat.press.originals];
 
@@ -257,7 +269,7 @@ function collectionShelf(c: Collection, cat: Catalogue, placed: Placed[], named:
   const mine = placed.filter(({ t }) => belongs(t, c, cat));
   if (!mine.length) return nothing;
   const run = (cards: Placed[]) => html`<ul class="shelf">${cards.map(({ t, i }) => card(t, i))}</ul>`;
-  return html`<section class="collection" aria-labelledby="c-${c.slug}">
+  return html`<section class="collection" aria-labelledby="c-${c.slug}" data-theme=${THEMED[c.slug] ?? nothing}>
     ${named ? html`<h3 class="collection-head" id="c-${c.slug}">
       <a href=${pathOf({ kind: "collection", collection: c })}>${name}</a></h3>
       <p class="collection-tag">${c.tagline}</p>` : nothing}

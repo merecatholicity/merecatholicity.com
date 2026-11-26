@@ -49,6 +49,78 @@
   --measure: 1080px;
 }
 
+/* Shelf themes (owner, 2026-11-26). A shelf may dress the whole site in its own colours while the
+   reader is on it: src/theme.ts sets <html data-theme> on its page, its books' pages, and the home
+   page while its covers hold the middle of the window, and src/art.ts turns the painting to the
+   shelf's own ring. The background never changes. Every colour below is a registered property, so
+   it fades rather than jumps, and the fade is undone the same way when the reader moves on. */
+@property --accent { syntax: "<color>"; inherits: true; initial-value: #ef6b6b; }
+@property --accent-2 { syntax: "<color>"; inherits: true; initial-value: #f2827c; }
+@property --gold { syntax: "<color>"; inherits: true; initial-value: #cba36a; }
+@property --rule { syntax: "<color>"; inherits: true; initial-value: #30353b; }
+@property --ink-soft { syntax: "<color>"; inherits: true; initial-value: #d3d6d9; }
+@property --muted-c { syntax: "<color>"; inherits: true; initial-value: #a1a7ae; }
+@property --faint { syntax: "<color>"; inherits: true; initial-value: #9aa1a9; }
+@property --soon { syntax: "<color>"; inherits: true; initial-value: #ef6b6b; }
+@property --soon-on { syntax: "<color>"; inherits: true; initial-value: #2a1113; }
+@property --stripe-1 { syntax: "<color>"; inherits: true; initial-value: #30353b; }
+@property --stripe-2 { syntax: "<color>"; inherits: true; initial-value: #30353b; }
+@property --stripe-3 { syntax: "<color>"; inherits: true; initial-value: #30353b; }
+@property --sky { syntax: "<number>"; inherits: true; initial-value: 0; }
+:root {
+  --stripe-1: var(--rule); --stripe-2: var(--rule); --stripe-3: var(--rule);
+  --sky: 0;
+  --dot: polygon(50.0% 0.0%, 79.4% 9.5%, 97.6% 34.5%, 97.6% 65.5%, 79.4% 90.5%, 50.0% 100.0%, 20.6% 90.5%, 2.4% 65.5%, 2.4% 34.5%, 20.6% 9.5%);
+  transition: --accent 1.8s ease, --accent-2 1.8s ease, --gold 1.8s ease, --rule 1.8s ease,
+    --ink-soft 1.8s ease, --muted-c 1.8s ease, --faint 1.8s ease, --soon 1.8s ease, --soon-on 1.8s ease,
+    --stripe-1 1.8s ease, --stripe-2 2.2s ease, --stripe-3 2.6s ease, --sky 2.4s ease;
+}
+/* Lérins America: the colours of Frederic Edwin Church's Our Banner in the Sky (c. 1861), the
+   ring's first painting: its coral stripes, its cream, its teal canton, its gold horizon. */
+:root[data-theme="america"] {
+  --accent: #e8835f;
+  --accent-2: #f2a27f;
+  --gold: #e9b65a;
+  --rule: #26403f;
+  --ink-soft: #efdccb;
+  --muted-c: #a9bfbd;
+  --faint: #a6b3b1;
+  --soon: #de7856;
+  --soon-on: #2a120b;
+  --stripe-1: #3f8f93;
+  --stripe-2: #efdccb;
+  --stripe-3: #de7856;
+  --sky: 1;
+  --dot: polygon(50.0% 0.0%, 61.8% 33.8%, 97.6% 34.5%, 69.0% 56.2%, 79.4% 90.5%, 50.0% 70.0%, 20.6% 90.5%, 31.0% 56.2%, 2.4% 34.5%, 38.2% 33.8%);
+}
+/* The sky behind the page: the painting's gold horizon low in the window and its teal high,
+   faint, fading in with the theme. */
+body::after {
+  content: "";
+  position: fixed; top: 0; left: 0; right: 0; height: 100vh; height: 100lvh;
+  z-index: -1; pointer-events: none;
+  opacity: var(--sky);
+  background:
+    radial-gradient(120% 55% at 50% 108%, rgba(229, 176, 74, 0.11), rgba(222, 120, 86, 0.06) 45%, transparent 72%),
+    radial-gradient(90% 45% at 12% -8%, rgba(30, 78, 82, 0.22), transparent 70%);
+}
+/* The painting's first paint on a themed shelf's own pages (src/art.ts names the ring). */
+:root[data-art="america"] body::before { background-image: url("/art/am-banner-m.webp"); }
+@media (min-width: 900px) {
+  :root[data-art="america"] body::before {
+    background-image: url("/art/am-banner-d.webp");
+    background-position: right bottom; background-size: min(58vw, 920px) auto;
+  }
+}
+/* The shelf's own head on the home page carries a star, always: the hint of what lies there. */
+section.collection[data-theme="america"] .collection-head::before {
+  content: ""; display: inline-block; width: 0.62em; height: 0.62em; margin: 0 0.4em 0.08em 0;
+  background: var(--gold); clip-path: polygon(50.0% 0.0%, 61.8% 33.8%, 97.6% 34.5%, 69.0% 56.2%, 79.4% 90.5%, 50.0% 70.0%, 20.6% 90.5%, 31.0% 56.2%, 2.4% 34.5%, 38.2% 33.8%);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { transition: none; }
+}
+
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; background: var(--bg); }
 body {
@@ -117,8 +189,11 @@ p { overflow-wrap: break-word; }
   width: 100%; max-width: var(--measure); margin: 0 auto;
   padding: 20px var(--page-pad);
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px;
-  border-bottom: 1px solid var(--rule);
+  background: linear-gradient(90deg, var(--stripe-1) 0 33.4%, var(--stripe-2) 33.4% 66.7%, var(--stripe-3) 66.7%)
+    left bottom / 100% 1px no-repeat;
+  transition: background-size 1.8s ease;
 }
+:root[data-theme] .masthead { background-size: 100% 3px; }
 .brand { display: flex; align-items: center; gap: 14px; color: var(--ink); text-decoration: none; min-width: 0; }
 .brand:hover { color: var(--ink); }
 .mark { width: auto; height: 52px; flex: none; }
@@ -138,7 +213,9 @@ p { overflow-wrap: break-word; }
 }
 .ornament { display: flex; align-items: center; gap: 12px; width: min(300px, 70%); margin: 16px 0 18px; }
 .ornament::before, .ornament::after { content: ""; flex: 1; border-top: 1px solid var(--gold); opacity: 0.7; }
-.ornament span { width: 5px; height: 5px; border-radius: 50%; background: var(--gold); }
+.ornament span { width: 5px; height: 5px; background: var(--gold); clip-path: var(--dot);
+  transition: width 1.8s ease, height 1.8s ease, clip-path 1.8s ease; }
+:root[data-theme] .ornament span { width: 13px; height: 13px; }
 .motto-latin { margin: 0; font-size: clamp(1.05rem, 2.6vw, 1.35rem); font-style: italic; color: var(--gold); line-height: 1.4; }
 .motto-english { margin: 8px 0 0; font-size: clamp(0.95rem, 2vw, 1.05rem); color: var(--ink-soft); }
 .motto-source { margin: 6px 0 0; font: 0.8rem var(--font-sans); color: var(--faint); letter-spacing: 0.04em; }

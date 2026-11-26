@@ -15,7 +15,7 @@ import { render } from "@lit-labs/ssr";
 import { collectResultSync } from "@lit-labs/ssr/lib/render-result.js";
 import type { Catalogue, Press, Route, Title } from "../src/types.ts";
 import { cardMaker } from "./cards.ts";
-import { headTags, jsonLd, metaOf, page, pathOf, shelves } from "../src/views.ts";
+import { headTags, jsonLd, metaOf, page, pathOf, shelves, themeOf } from "../src/views.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = join(ROOT, "dist");
@@ -114,8 +114,10 @@ writeFileSync(join(DIST, dataName), data);
 function document(route: Route): string {
   const meta = metaOf(route, cat);
   const body = collectResultSync(render(page(route, cat)));
+  // a themed shelf's page is served in its colours and with its painting (src/theme.ts)
+  const theme = themeOf(route);
   return `<!doctype html>
-<html lang="en">
+<html lang="en"${theme ? ` data-theme="${theme}" data-art="${theme}"` : ""}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
