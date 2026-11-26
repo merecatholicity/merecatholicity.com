@@ -181,6 +181,39 @@
           "name": "Arithmetic"
         }
       ]
+    },
+    {
+      "slug": "lerins-classics",
+      "name": "Lérins Classics",
+      "short": "Classics",
+      "tagline": "The great books, from Homer to Faulkner",
+      "accent": "#8b4a32",
+      "about": [
+        "The great books, from Homer and Plato to Hemingway and Faulkner: the epics and the plays, the philosophers, and the novels every list of the greatest books names.",
+        "Lérins Classics prints each whole, in its own words or in a translation of standing, with a new introduction and notes for the reader of today."
+      ],
+      "parts": [
+        {
+          "slug": "ancients",
+          "name": "The ancients"
+        },
+        {
+          "slug": "medieval",
+          "name": "The Middle Ages and the Renaissance"
+        },
+        {
+          "slug": "romantics",
+          "name": "From Milton to the Romantics"
+        },
+        {
+          "slug": "novel",
+          "name": "The nineteenth-century novel"
+        },
+        {
+          "slug": "moderns",
+          "name": "The moderns"
+        }
+      ]
     }
   ],
   "privacy": [
