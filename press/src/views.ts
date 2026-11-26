@@ -440,6 +440,11 @@ function titlePage(t: Title, cat: Catalogue): TemplateResult {
           : c ? html`<div class="book-desc">
             <p class="book-pending">This edition is in preparation. From the collection:</p>
             ${c.about.map(p => html`<p>${p}</p>`)}</div>` : nothing}
+        ${t.contents?.length ? html`<section class="book-toc" aria-labelledby="toc-head">
+          <h2 id="toc-head">Contents</h2>
+          ${t.contents.map(g => html`${g.part ? html`<h3>${g.part}</h3>` : nothing}
+            <ul>${g.items.map(i => html`<li>${i}</li>`)}</ul>`)}
+        </section>` : nothing}
       </div>
     </article>`;
 }

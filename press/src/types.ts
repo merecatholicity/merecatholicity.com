@@ -63,6 +63,9 @@ export interface Title {
    *  page then shows the collection's own words. */
   lead: string[];
   description: string[];
+  /** The table of contents, shown under the description: groups in the book's order, each with
+   *  its part's heading where the book has one. No page numbers. */
+  contents?: { part?: string; items: string[] }[];
   /** Its place in a collection: the collection's slug, its number there, and its part. */
   collection?: { slug: string; no: number; part: string };
   /** The link-preview card's path (1200x630, scripts/cards.ts). The build fills it: never
