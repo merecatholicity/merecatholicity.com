@@ -2906,5 +2906,26 @@
       "Its twenty-four books cover some fifty days in the tenth year of the Greek siege of Troy. Achilles, slighted by Agamemnon, withdraws from the fighting, and the Trojans under Hector drive the Greeks back to their ships. Only the death of his friend Patroclus brings Achilles back to the field. He kills Hector and drags his body before the walls, and the poem ends when the old king Priam comes by night to his tent to ransom his son.",
       "No. 1 of Lérins Classics, in the collection’s first part, The ancients, prints the Iliad whole in the English prose of Samuel Butler (1898). The Editors of the Mere Catholicity Project add a new introduction on the poem, its making and its readers, and explanatory notes on the gods and heroes, the places of the Greek world, and the customs of war and hospitality the poem takes for granted."
     ]
+  },
+  {
+    "slug": "the-odyssey",
+    "title": "The Odyssey",
+    "author": "Homer",
+    "format": "Paperback",
+    "listed": "2026-11-26",
+    "cover": "the-odyssey",
+    "collection": {
+      "slug": "lerins-classics",
+      "no": 2,
+      "part": "ancients"
+    },
+    "lead": [
+      "Homer’s poem of the ten years’ homecoming of Odysseus from Troy to Ithaca, in Samuel Butler’s English prose."
+    ],
+    "description": [
+      "The Odyssey, the second of the two poems the Greeks ascribed to Homer, was composed like the Iliad near the end of a long tradition of oral poetry, probably a little after it. Where the Iliad is a poem of war, the Odyssey is a poem of wandering and return. Its hero, Odysseus of Ithaca, the cleverest of the Greeks at Troy, became for later ages the figure of the traveller and of the man who endures.",
+      "The poem opens on Ithaca in the tenth year after the fall of Troy, where Odysseus’ wife Penelope is besieged by suitors and his son Telemachus sets out to seek news of him. Odysseus himself tells the tale of his wanderings at the court of the Phaeacians: the Lotus-eaters, the Cyclops, Circe, the visit to the dead, the Sirens, Scylla and Charybdis. The second half brings him home in disguise to test his household and to reckon with the suitors.",
+      "No. 2 of Lérins Classics, in the collection’s first part, The ancients, prints the Odyssey whole in the English prose of Samuel Butler (1900). The Editors of the Mere Catholicity Project add a new introduction on the poem and its place beside the Iliad, and explanatory notes on its gods and peoples, its geography, real and imagined, and the customs of the Greek household."
+    ]
   }
 ]
