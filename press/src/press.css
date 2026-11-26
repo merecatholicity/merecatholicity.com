@@ -103,13 +103,30 @@ body::after {
     radial-gradient(120% 55% at 50% 108%, rgba(229, 176, 74, 0.11), rgba(222, 120, 86, 0.06) 45%, transparent 72%),
     radial-gradient(90% 45% at 12% -8%, rgba(30, 78, 82, 0.22), transparent 70%);
 }
-/* The painting's first paint on a themed shelf's own pages (src/art.ts names the ring). */
-:root[data-art="america"] body::before { background-image: url("/art/am-banner-m.webp"); }
+/* Church's Our Banner in the Sky, the source of the palette, hangs in the top left corner while
+   the theme is on, its feather baked in (am-sky-*: whole at the corner, gone by the right and
+   the foot), fading in and out with the colours by the same --sky. It stands apart from the
+   ring, which turns on in its own place at the right. The file is named only once a page has
+   been in the theme (data-sky, set by src/theme.ts and kept), so no other page fetches it. */
+#app::before {
+  content: "";
+  position: fixed; top: 0; left: 0; width: 100%; height: 100vh; height: 100lvh;
+  z-index: -1; pointer-events: none;
+  opacity: calc(var(--sky) * var(--sky-op));
+  background: left top / min(100vw, 900px) auto no-repeat;
+  filter: saturate(0.95) brightness(1.06);
+}
+:root { --sky-op: 0.2; }
+:root[data-sky="america"] #app::before { background-image: url("/art/am-sky-m.webp"); }
 @media (min-width: 900px) {
-  :root[data-art="america"] body::before {
-    background-image: url("/art/am-banner-d.webp");
-    background-position: right bottom; background-size: min(58vw, 920px) auto;
-  }
+  :root { --sky-op: 0.22; }
+  #app::before { background-size: min(68vw, 1250px) auto; }
+  :root[data-sky="america"] #app::before { background-image: url("/art/am-sky-d.webp"); }
+}
+/* The ring's first painting on a themed shelf's own pages (src/art.ts names the ring). */
+:root[data-art="america"] body::before { background-image: url("/art/am-meetinghouse-m.webp"); }
+@media (min-width: 900px) {
+  :root[data-art="america"] body::before { background-image: url("/art/am-meetinghouse-d.webp"); }
 }
 /* The shelf's own head on the home page carries a star, always: the hint of what lies there. */
 section.collection[data-theme="america"] .collection-head::before {

@@ -18,6 +18,8 @@ function setTheme(name?: string) {
   current = name;
   if (name) root.dataset.theme = name;
   else delete root.dataset.theme;
+  // the corner painting's file, named once and kept, so it can still fade out after the theme
+  if (name) root.dataset.sky = name;
   // With no motion the ring never turns, so the stylesheet's own painting is changed instead.
   if (still) {
     if (name) root.dataset.art = name;

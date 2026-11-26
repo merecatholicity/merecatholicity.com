@@ -117,7 +117,7 @@ function document(route: Route): string {
   // a themed shelf's page is served in its colours and with its painting (src/theme.ts)
   const theme = themeOf(route);
   return `<!doctype html>
-<html lang="en"${theme ? ` data-theme="${theme}" data-art="${theme}"` : ""}>
+<html lang="en"${theme ? ` data-theme="${theme}" data-art="${theme}" data-sky="${theme}"` : ""}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

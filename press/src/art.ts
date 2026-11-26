@@ -21,11 +21,11 @@ const PAINTINGS: [name: string, wide: boolean][] = [
   ["merecat", true], ["lexorandi", false], ["geneva", true], ["luther", false],
   ["stgiles", true],
 ];
-/** Lérins America's ring. Church's Our Banner in the Sky (c. 1861) first, the stylesheet's for
- *  that shelf and the source of its palette; Trumbull's Declaration (1819); the rest painted for
- *  the press after them. */
+/** Lérins America's ring: Trumbull's Declaration (1819) and paintings made for the press after it
+ *  and after Church's Our Banner in the Sky (c. 1861), which is not in the ring but hangs in the
+ *  top left corner while the theme is on (press.css, am-sky). The first is the stylesheet's. */
 const AMERICA: [name: string, wide: boolean][] = [
-  ["am-banner", true], ["am-meetinghouse", false], ["am-whitefield", true], ["am-statehouse", false],
+  ["am-meetinghouse", false], ["am-whitefield", true], ["am-statehouse", false],
   ["am-declaration", true], ["am-eagle", false], ["am-capitol", false], ["am-basilica", false],
 ];
 const RINGS: Record<string, [string, boolean][]> = { "": PAINTINGS, america: AMERICA };
