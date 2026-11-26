@@ -15,7 +15,7 @@ export interface Press {
   social: { name: string; url: string }[];
   /** The titles the home page's carousel shows, in order, by slug. */
   featured: string[];
-  /** Miscellaneous, the last shelf: every title in no collection (the press's own books).
+  /** Originals, the last shelf: every title in no collection (the press's own books).
    *  Shaped as a collection so the filter and its page treat it as one, but it has no numbers
    *  and no series line. */
   originals: Collection;

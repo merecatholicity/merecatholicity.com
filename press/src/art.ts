@@ -37,7 +37,7 @@ const REFORMATION: [name: string, wide: boolean][] = [
   ["stgiles", true], ["rf-heidelberg", true], ["rf-mercersburg", false],
 ];
 /** The classics ring (owner, 2026-11-26), worn by Lérins Classics, Chesterton, MacDonald and
- *  Miscellaneous: one painting from each age the Classics shelf runs through. Raphael's School of
+ *  Originals: one painting from each age the Classics shelf runs through. Raphael's School of
  *  Athens for the ancients, Michelino's Dante (1465), Friedrich's Wanderer above the Sea of Fog,
  *  Turner's Fighting Temeraire, Levitan's Quiet Abode (1890) and Grimshaw's Thames at Westminster
  *  by moonlight, Chesterton's London. Cugat's Celestial Eyes (1925), the Gatsby jacket's painting,

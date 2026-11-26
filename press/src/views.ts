@@ -20,7 +20,7 @@ export function seriesLine(t: Title, cat: Catalogue): string | undefined {
 
 /** What a shelf is called wherever the site speaks of it: a collection is always "Lérins
  *  Newman Collection", never bare "Lérins Newman" (that is the series line printed on its
- *  books, "Lérins Newman · No. 31"). The books in no collection are Miscellaneous. */
+ *  books, "Lérins Newman · No. 31"). The books in no collection are Originals. */
 export const shelfName = (c: Collection, cat: Catalogue) =>
   c === cat.press.originals ? c.name : `${c.name} Collection`;
 
@@ -32,7 +32,7 @@ export const shelfName = (c: Collection, cat: Catalogue) =>
 export const THEMED: Record<string, string> = {
   "lerins-america": "america", "lerins-schoolhouse": "america", "lerins-reformation": "reformation",
   // the classics theme (owner, 2026-11-26): the great books, and the shelves of literature beside
-  // them, Chesterton, MacDonald and Miscellaneous (whose slug is the originals' own)
+  // them, Chesterton, MacDonald and Originals (whose slug is the originals' own)
   "lerins-classics": "classics", "lerins-chesterton": "classics", "lerins-macdonald": "classics",
   "miscellaneous": "classics",
 };
@@ -41,19 +41,19 @@ export const THEMED: Record<string, string> = {
  *  none of its own: there the shelf in view decides (src/theme.ts). */
 export function themeOf(route: Route): string | undefined {
   if (route.kind === "collection") return THEMED[route.collection.slug];
-  // a book with no collection stands on Miscellaneous
+  // a book with no collection stands on Originals
   if (route.kind === "title") return THEMED[route.title.collection?.slug ?? "miscellaneous"];
   return undefined;
 }
 
-/** Every shelf of the catalogue, in order: each collection, then Miscellaneous last. */
+/** Every shelf of the catalogue, in order: each collection, then Originals last. */
 export const shelves = (cat: Catalogue): Collection[] => [...cat.press.collections, cat.press.originals];
 
-/** Whether a title stands on a shelf: Miscellaneous holds every title in no collection. */
+/** Whether a title stands on a shelf: Originals holds every title in no collection. */
 const belongs = (t: Title, c: Collection, cat: Catalogue) =>
   c === cat.press.originals ? !t.collection : t.collection?.slug === c.slug;
 
-/** A shelf's titles: a collection's by number, Miscellaneous newest first. */
+/** A shelf's titles: a collection's by number, Originals newest first. */
 const inCollection = (c: Collection, cat: Catalogue) => cat.titles.filter(t => belongs(t, c, cat))
   .sort((a, b) => a.collection && b.collection ? a.collection.no - b.collection.no : b.listed.localeCompare(a.listed));
 
@@ -243,6 +243,11 @@ const cover = (t: Title, sizes: string, eager = false, high = eager) => {
 /** A title not out yet: one pill in the charcoal theme's red, and no link. */
 const soon = (short = false) => html`<span class=${short ? "soon soon-small" : "soon"}>Coming soon</span>`;
 
+/** A title on sale, on its shelf card: the same pill in the paperback's green, and no link, since
+ *  the shelves carry no buy buttons (owner, 2026-11-13). It replaced the card's silence (owner,
+ *  2026-11-26). */
+const avail = () => html`<span class="soon soon-small avail">Available now</span>`;
+
 /** The paperback's button, the green. */
 const paperback = (t: Title) => html`<a class="btn btn-paper" href=${t.amazon} rel="noopener"
   target="_blank"><span>Paperback on Amazon<span class="sr"> of ${t.title}</span></span></a>`;
@@ -265,7 +270,7 @@ const card = (t: Title, i: number) => html`<li class="card">
     ${t.subtitle ? html`<span class="card-sub">${t.subtitle}</span>` : nothing}
     ${t.author ? html`<span class="card-author">${t.author}</span>` : nothing}
   </a>
-  ${t.amazon ? nothing : html`<p class="card-buy">${soon(true)}</p>`}
+  <p class="card-buy">${t.amazon ? avail() : soon(true)}</p>
 </li>`;
 
 type Placed = { t: Title; i: number };
