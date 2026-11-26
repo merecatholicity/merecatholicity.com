@@ -2885,5 +2885,26 @@
       "The New Higher Arithmetic takes up the whole subject again at a higher level, for pupils who have finished the Practical. It treats the theory of numbers and of the operations, divisibility, primes and the greatest common divisor, fractions and decimals more fully, the metric system beside the old measures, and then the arithmetic of business at length: interest simple and compound, discount, partnership, exchange, stocks, bonds and annuities. It closes with ratio and proportion, powers and roots, progressions, alligation and mensuration.",
       "No. 9 of Lérins Schoolhouse, in the collection’s second part, Arithmetic, prints the New Higher Arithmetic whole, from its edition of 1880. The text is that of Ray’s New Series, printed by Van Antwerp, Bragg and Company of Cincinnati, revised by the publisher’s editors after Ray’s death and carrying his name as the series always had. The Editors of the Mere Catholicity Project add a new introduction for the teacher at home, on the course and its place in the old schools, an answer key to every exercise, each answer computed and checked, a table of the old measures of length, weight, money and land the problems use beside their present values, and notes on the business practices of the problems."
     ]
+  },
+  {
+    "slug": "the-iliad",
+    "title": "The Iliad",
+    "author": "Homer",
+    "format": "Paperback",
+    "listed": "2026-11-26",
+    "cover": "the-iliad",
+    "collection": {
+      "slug": "lerins-classics",
+      "no": 1,
+      "part": "ancients"
+    },
+    "lead": [
+      "Homer’s poem of the wrath of Achilles in the tenth year of the war at Troy, in Samuel Butler’s English prose."
+    ],
+    "description": [
+      "The Iliad is the oldest work of Greek literature and stands at the head of the literature of Europe. The Greeks ascribed it to Homer, a poet of whose life nothing certain is known, and it seems to have taken its present form in the eighth or seventh century before Christ, at the end of a long tradition of poetry sung without writing. It was learned by heart in the schools of Greece for a thousand years, and every later epic of the West, from Virgil’s to Milton’s, was written in answer to it.",
+      "Its twenty-four books cover some fifty days in the tenth year of the Greek siege of Troy. Achilles, slighted by Agamemnon, withdraws from the fighting, and the Trojans under Hector drive the Greeks back to their ships. Only the death of his friend Patroclus brings Achilles back to the field. He kills Hector and drags his body before the walls, and the poem ends when the old king Priam comes by night to his tent to ransom his son.",
+      "No. 1 of Lérins Classics, in the collection’s first part, The ancients, prints the Iliad whole in the English prose of Samuel Butler (1898). The Editors of the Mere Catholicity Project add a new introduction on the poem, its making and its readers, and explanatory notes on the gods and heroes, the places of the Greek world, and the customs of war and hospitality the poem takes for granted."
+    ]
   }
 ]
