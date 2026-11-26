@@ -18,8 +18,11 @@ function setTheme(name?: string) {
   current = name;
   if (name) root.dataset.theme = name;
   else delete root.dataset.theme;
-  // the corner painting's file, named once and kept, so it can still fade out after the theme
-  if (name) root.dataset.sky = name;
+  // the corner painting's file, named once and kept, so it can still fade out after the theme:
+  // each theme's own, a list, so scrolling from one themed shelf to the next fades one corner out
+  // as the other fades in
+  if (name && !(root.dataset.sky ?? "").split(" ").includes(name))
+    root.dataset.sky = [root.dataset.sky, name].filter(Boolean).join(" ");
   // With no motion the ring never turns, so the stylesheet's own painting is changed instead.
   if (still) {
     if (name) root.dataset.art = name;
