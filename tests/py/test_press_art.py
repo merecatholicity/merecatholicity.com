@@ -32,6 +32,24 @@ class PressArt(unittest.TestCase):
                 self.assertTrue((PRESS / f"static/art/{corner}-{size}.webp").is_file())
                 self.assertIn(f"/art/{corner}-{size}.webp", css)
 
+    def test_every_painting_keeps_its_feather(self):
+        """The feather is baked into each painting's alpha, never a CSS mask (press.css), so a
+        recompression that drops it fails in silence: the Deësis Christ lost its feather to one
+        (2026-11-26, #97) and stood in the corner of All as a hard-edged block on every screen.
+        A lossy WebP keeps its alpha in an ALPH chunk; a solid opaque plane compresses to under
+        100 bytes, every feathered painting's to over 3,500. No decoder needed."""
+        for p in sorted((PRESS / "static/art").glob("*.webp")):
+            chunks, b, i = {}, p.read_bytes(), 12
+            self.assertEqual((b[:4], b[8:12]), (b"RIFF", b"WEBP"), p.name)
+            while i + 8 <= len(b):
+                n = int.from_bytes(b[i + 4:i + 8], "little")
+                chunks[b[i:i + 4]] = n
+                i += 8 + n + (n & 1)
+            if b"VP8L" in chunks:   # lossless: the alpha rides inside the image data
+                continue
+            self.assertGreater(chunks.get(b"ALPH", 0), 1000,
+                               f"{p.name}: no feathered alpha (opaque, or its alpha dropped)")
+
     def test_every_painting_has_both_files(self):
         block = re.search(r"const PAINTINGS[^=]*=\s*\[(.*?)\];", ART, re.S).group(1)
         names = re.findall(r'\["([a-z-]+)",\s*(?:true|false)\]', block)
