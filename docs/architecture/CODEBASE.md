@@ -55,7 +55,9 @@ place and then navigates without reloads, `src/carousel.ts` drives Featured read
 `src/contact.ts` the Correspondence form (the contact worker's, Turnstile on intent). The catalogue
 is data: `content/titles.json` and `content/press.json` (the featured slugs and the shelves, each
 collection with Miscellaneous last), embedded in every page; `scripts/placeholders.ts` draws a
-collection's "cover coming soon" front. Shipped by `.github/workflows/press.yml`.
+collection's "cover coming soon" front; `scripts/subset-cinzel.sh` cuts the wordmark face to the
+names' characters (`content/fonts/`, committed; the build refuses a name the cut lacks). Shipped by
+`.github/workflows/press.yml`.
 
 **`pagejs/` (2026-09-18)** is the third source tree beside `app/` and `client/`:
 the seven scripts a page loads directly rather than through a bundle — `nav.ts`

@@ -67,10 +67,16 @@ const jsText = js.outputFiles[0].text;
 const jsName = `assets/app-${hash(jsText)}.js`;
 writeFileSync(join(DIST, jsName), jsText);
 
-// The wordmark's face, named by its hash like everything under assets/ (static/_headers
-// makes those immutable). The stylesheet names it by a placeholder the build fills.
+// The wordmark's face, cut to the characters the press's and the shelves' names use
+// (content/fonts, scripts/subset-cinzel.sh: 6.8 KB, against the whole Latin face's 15), named by
+// its hash like everything under assets/ (static/_headers makes those immutable). The stylesheet
+// names it by a placeholder the build fills. A name with a character the cut lacks is refused.
 const FONTS = join(ROOT, "node_modules/@fontsource/cinzel");
-const font = readFileSync(join(FONTS, "files/cinzel-latin-500-normal.woff2"));
+const fontChars = new Set(read("content/fonts/cinzel-chars.txt"));
+for (const name of [press.name, press.originals.name, ...press.collections.map(c => `${c.name} Collection`)])
+  for (const ch of name)
+    if (!fontChars.has(ch)) throw new Error(`"${name}": "${ch}" is not in content/fonts/cinzel-chars.txt (run scripts/subset-cinzel.sh)`);
+const font = readFileSync(join(ROOT, "content/fonts/cinzel-500-subset.woff2"));
 const fontName = `assets/cinzel-500-${hash(font)}.woff2`;
 writeFileSync(join(DIST, fontName), font);
 cpSync(join(FONTS, "LICENSE"), join(DIST, "assets/cinzel-OFL.txt"));

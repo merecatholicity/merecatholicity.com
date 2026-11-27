@@ -283,11 +283,12 @@ const buy = (t: Title) => !t.amazon ? soon() : html`
     Amazon<span class="sr"> edition of ${t.title}</span></span></a>` : nothing}`;
 
 /** A shelf's card. On a shelf's own page the first row loads at once (`eager`), it being the
- *  page's largest paint on a desktop; everywhere else, the home page's shelves included (they
+ *  page's largest paint on a desktop, and a phone's row of two first of all (`high`: on a shelf
+ *  of few books, the Originals, a cover is the phone's largest paint too); everywhere else, the home page's shelves included (they
  *  begin below the first screen), a cover waits for the reader to near it. */
-const card = (t: Title, eager: boolean) => html`<li class="card">
+const card = (t: Title, eager: boolean, high = false) => html`<li class="card">
   <a class="card-link" href="/titles/${t.slug}/">
-    ${cover(t, "(max-width: 600px) 45vw, 230px", eager, false)}
+    ${cover(t, "(max-width: 600px) 45vw, 230px", eager, high)}
     ${t.collection ? html`<span class="card-no">No. ${t.collection.no}</span>` : nothing}
     <span class="card-title">${t.title}</span>
     ${t.subtitle ? html`<span class="card-sub">${t.subtitle}</span>` : nothing}
@@ -306,7 +307,7 @@ function collectionShelf(c: Collection, cat: Catalogue, placed: Placed[], named:
   const name = shelfName(c, cat);
   const mine = placed.filter(({ t }) => belongs(t, c, cat));
   if (!mine.length) return nothing;
-  const run = (cards: Placed[]) => html`<ul class="shelf">${cards.map(({ t, i }) => card(t, !named && i < 4))}</ul>`;
+  const run = (cards: Placed[]) => html`<ul class="shelf">${cards.map(({ t, i }) => card(t, !named && i < 4, !named && i < 2))}</ul>`;
   return html`<section class="collection" aria-labelledby="c-${c.slug}" data-theme=${THEMED[c.slug] ?? nothing}>
     ${named ? html`<h3 class="collection-head" id="c-${c.slug}">
       <a href=${pathOf({ kind: "collection", collection: c })}>${name}</a></h3>
@@ -411,7 +412,8 @@ function collectionPage(c: Collection, cat: Catalogue, shown: number): TemplateR
     <header class="collection-intro">
       <p class="collection-kicker">${c === cat.press.originals ? "Lérins Press" : "A collection of Lérins Press"} · ${
         order.length} ${order.length === 1 ? "title" : "titles"}</p>
-      <h1 tabindex="-1">${shelfName(c, cat)}</h1>
+      <h1 tabindex="-1">${c === cat.press.originals ? html`<span>${c.name}</span>`
+        : html`<span>${c.name}</span> <span>Collection</span>`}</h1>
       <p class="collection-tagline">${c.tagline}</p>
       <p class="ornament" aria-hidden="true"><span></span></p>
       ${c.about.map(p => html`<p>${p}</p>`)}
