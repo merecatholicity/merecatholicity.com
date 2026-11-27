@@ -6,25 +6,39 @@
 // registered custom property with a transition, press.css "Shelf themes"); this module only says
 // which theme is on, and turns the painting's ring with it (src/art.ts).
 import type { Route } from "./types.ts";
-import { themeOf } from "./views.ts";
+import { CORNER_ART, CORNER_SLOT, themeOf } from "./views.ts";
 import { setRing } from "./art.ts";
 
 const root = document.documentElement;
 const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let current = root.dataset.theme;
 
+/** Hang a theme's corner picture in its slot (data-a, data-b; press.css "The corners"), where it
+ *  stays after the theme, so it can still fade out as the next comes in. No theme is "plain",
+ *  the Deësis Christ's. */
+function hang(name: string) {
+  const slot = CORNER_SLOT[name];
+  if (slot) root.dataset[slot] = name;
+}
+
+/** After the load: the page's corner (its theme's, or the Deësis Christ with none), fetched and
+ *  decoded, then hung, so it fades in (press.css, --ca and --cb). It waits like the ring's later
+ *  paintings: it is decoration, and the first paint's pictures (the shield, a cover, the ring's
+ *  first painting) have the network to themselves. After this, a change of theme hangs its
+ *  corner at once (setTheme). */
+export function bindCorner() {
+  const name = current ?? "plain";
+  const img = new Image();
+  img.src = `/art/${CORNER_ART[name]}-${matchMedia("(min-width: 900px)").matches ? "d" : "m"}.webp`;
+  img.decode().catch(() => undefined).then(() => { if ((current ?? "plain") === name) hang(name); });
+}
+
 function setTheme(name?: string) {
   if (name === current) return;
   current = name;
   if (name) root.dataset.theme = name;
   else delete root.dataset.theme;
-  // the corner painting's file, named once and kept, so it can still fade out after the theme:
-  // each theme's own, a list, so scrolling from one themed shelf to the next fades one corner out
-  // as the other fades in
-  // and no theme is "plain", whose corner (the Deësis) is named the same way
-  const sky = name ?? "plain";
-  if (!(root.dataset.sky ?? "").split(" ").includes(sky))
-    root.dataset.sky = [root.dataset.sky, sky].filter(Boolean).join(" ");
+  hang(name ?? "plain");
   // With no motion the ring never turns, so the stylesheet's own painting is changed instead.
   if (still) {
     if (name) root.dataset.art = name;

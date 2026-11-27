@@ -10,7 +10,7 @@ import { bindContact } from "./contact.ts";
 import { bindSignup } from "./signup.ts";
 import { bindCarousel } from "./carousel.ts";
 import { bindArt } from "./art.ts";
-import { bindTheme } from "./theme.ts";
+import { bindCorner, bindTheme } from "./theme.ts";
 import { SHELF_BATCH, headTags, metaOf, nav, page, routeOf, shelfOrder } from "./views.ts";
 
 const root = document.getElementById("app");
@@ -19,7 +19,14 @@ bindSignup();
 const src = root?.dataset.catalogue;
 // Not before the load: the first paint (and its largest image) has the network to itself.
 if (document.readyState !== "complete") await new Promise(r => addEventListener("load", r, { once: true }));
+// and not before the frame after it has painted, then the browser's next idle moment: the load
+// can come a frame before the largest paint, and the catalogue (120 KB) and the decoration fetched
+// here must not share its moment (Safari, with no requestIdleCallback, waits a beat)
+await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+await new Promise<void>(r => "requestIdleCallback" in window
+  ? requestIdleCallback(() => r(), { timeout: 1500 }) : setTimeout(r, 100));
 bindArt();
+bindCorner();
 const cat = src
   ? await fetch(src).then(r => (r.ok ? r.json() as Promise<Catalogue> : null)).catch(() => null)
   : null;
