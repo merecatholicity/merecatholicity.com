@@ -105,6 +105,7 @@ on page one.)
 - **Lérins Press: a portrait fixed in the top left of every shelf (2026-11-26)** — `log/2026-11.md`
 - **Lérins Press scores 100 on Lighthouse, phone and desktop: the corners hang on <html>, and decoration waits for the load (2026-11-26)** — `log/2026-11.md`
 - **Lérins Press: the shelf names cannot move when Cinzel arrives, and the last two 99s (2026-11-26)** — `log/2026-11.md`
+- **Lérins Press: the Deësis Christ gets its feather back, and every painting is held to one (2026-11-26)** — `log/2026-11.md`
 
 ### Build system
 
