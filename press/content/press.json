@@ -120,10 +120,10 @@
       "slug": "lerins-america",
       "name": "Lérins America",
       "short": "America",
-      "tagline": "The Great Awakening and the Founding, in the original texts",
+      "tagline": "The Great Awakening, the Founding and the Civil War, in the original texts",
       "accent": "#2b3f63",
       "about": [
-        "The revival preached by Jonathan Edwards and George Whitefield, and the republic argued into being by Paine, Jefferson, Adams, Madison, Hamilton and their opponents, in the documents themselves.",
+        "The revival preached by Jonathan Edwards and George Whitefield, the republic argued into being by Paine, Jefferson, Adams, Madison, Hamilton and their opponents, and the war that tested it, told by the Union and the Confederacy in two matched series, in the documents themselves.",
         "Lérins America prints them whole, each in the words its first readers had."
       ],
       "parts": [
@@ -134,6 +134,14 @@
         {
           "slug": "founding",
           "name": "The Founding and the Republic, 1771–1799"
+        },
+        {
+          "slug": "union",
+          "name": "The Union in Their Own Words"
+        },
+        {
+          "slug": "confederacy",
+          "name": "The Confederacy in Their Own Words"
         }
       ]
     },
