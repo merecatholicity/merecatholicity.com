@@ -36,14 +36,26 @@ export const THEMED: Record<string, string> = {
   "lerins-classics": "classics", "miscellaneous": "classics",
   // three shelves with their author's portrait in the top left (owner, 2026-11-26): Newman under
   // the press's own ring and colours, Chesterton and MacDonald under the classics' (press.css,
-  // "The corner portraits"; src/art.ts RINGS)
+  // "The corners"; src/art.ts RINGS)
   "lerins-newman": "newman", "lerins-chesterton": "chesterton", "lerins-macdonald": "macdonald",
 };
 
-/** The corner portraits, each a fixed layer the build writes after #app (scripts/build.ts) and
- *  the stylesheet fades in under its theme: "plain" is the Deësis Christ, worn wherever no theme
- *  is on (All, Fathers, Devotions, and the pages of no shelf). */
-export const CORNERS = ["plain", "newman", "chesterton", "macdonald"];
+/** Which of <html>'s two corner slots each theme's picture hangs in, "a" its ::after and "b" its
+ *  ::before (press.css, "The corners"); "plain" is no theme's, the Deësis Christ. Neighbours on
+ *  the home page's run of shelves (no theme, Newman, no theme, Reformation, America and the
+ *  Schoolhouse, Chesterton, MacDonald, the classics) alternate, so one fades out as the next
+ *  fades in. A new theme with a corner takes the slot its neighbours leave free. */
+export const CORNER_SLOT: Record<string, "a" | "b"> = {
+  plain: "a", america: "a", macdonald: "a",
+  newman: "b", reformation: "b", chesterton: "b", classics: "b",
+};
+
+/** Each corner's picture, by its files' name under static/art/ (-m, and -d from 900px): what
+ *  src/theme.ts fetches and decodes before it hangs it, the stylesheet naming the same files. */
+export const CORNER_ART: Record<string, string> = {
+  plain: "pt-christ", america: "am-sky", macdonald: "pt-macdonald",
+  newman: "pt-newman", reformation: "geneva", chesterton: "pt-chesterton", classics: "cl-eyes",
+};
 
 /** A page's own theme: a themed shelf's page, or a page of one of its books. The home page has
  *  none of its own: there the shelf in view decides (src/theme.ts). */
@@ -270,9 +282,12 @@ const buy = (t: Title) => !t.amazon ? soon() : html`
   ${t.kindle ? html`<a class="btn btn-kindle" href=${t.kindle} rel="noopener" target="_blank"><span>Kindle on
     Amazon<span class="sr"> edition of ${t.title}</span></span></a>` : nothing}`;
 
-const card = (t: Title, i: number) => html`<li class="card">
+/** A shelf's card. On a shelf's own page the first row loads at once (`eager`), it being the
+ *  page's largest paint on a desktop; everywhere else, the home page's shelves included (they
+ *  begin below the first screen), a cover waits for the reader to near it. */
+const card = (t: Title, eager: boolean) => html`<li class="card">
   <a class="card-link" href="/titles/${t.slug}/">
-    ${cover(t, "(max-width: 600px) 45vw, 230px", i < 4, false)}
+    ${cover(t, "(max-width: 600px) 45vw, 230px", eager, false)}
     ${t.collection ? html`<span class="card-no">No. ${t.collection.no}</span>` : nothing}
     <span class="card-title">${t.title}</span>
     ${t.subtitle ? html`<span class="card-sub">${t.subtitle}</span>` : nothing}
@@ -291,7 +306,7 @@ function collectionShelf(c: Collection, cat: Catalogue, placed: Placed[], named:
   const name = shelfName(c, cat);
   const mine = placed.filter(({ t }) => belongs(t, c, cat));
   if (!mine.length) return nothing;
-  const run = (cards: Placed[]) => html`<ul class="shelf">${cards.map(({ t, i }) => card(t, i))}</ul>`;
+  const run = (cards: Placed[]) => html`<ul class="shelf">${cards.map(({ t, i }) => card(t, !named && i < 4))}</ul>`;
   return html`<section class="collection" aria-labelledby="c-${c.slug}" data-theme=${THEMED[c.slug] ?? nothing}>
     ${named ? html`<h3 class="collection-head" id="c-${c.slug}">
       <a href=${pathOf({ kind: "collection", collection: c })}>${name}</a></h3>

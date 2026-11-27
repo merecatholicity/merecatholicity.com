@@ -16,7 +16,7 @@
 /** Each painting, by its files' name under static/art/, and whether it is wide (it then stands
  *  at the bottom right on a desktop, not in the right margin). Augustine first: the stylesheet's.
  *  The Deësis Christ, once second, hangs fixed in the top left instead (owner, 2026-11-26; press.css
- *  "The corner portraits"), so the ring is twelve. */
+ *  "The corners"), so the ring is twelve. */
 const PAINTINGS: [name: string, wide: boolean][] = [
   ["augustine", false], ["community", true], ["inbox", false],
   ["hagia", true], ["credo", false], ["peter", true], ["profile", false],

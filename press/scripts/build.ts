@@ -15,7 +15,7 @@ import { render } from "@lit-labs/ssr";
 import { collectResultSync } from "@lit-labs/ssr/lib/render-result.js";
 import type { Catalogue, Press, Route, Title } from "../src/types.ts";
 import { cardMaker } from "./cards.ts";
-import { CORNERS, headTags, jsonLd, metaOf, page, pathOf, shelves, themeOf } from "../src/views.ts";
+import { headTags, jsonLd, metaOf, page, pathOf, shelves, themeOf } from "../src/views.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = join(ROOT, "dist");
@@ -117,7 +117,7 @@ function document(route: Route): string {
   // a themed shelf's page is served in its colours and with its painting (src/theme.ts)
   const theme = themeOf(route);
   return `<!doctype html>
-<html lang="en"${theme ? ` data-theme="${theme}" data-art="${theme}" data-sky="${theme}"` : ` data-sky="plain"`}>
+<html lang="en"${theme ? ` data-theme="${theme}" data-art="${theme}"` : ""}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -135,7 +135,6 @@ ${headTags(meta, cat).map(([a, k, v]) => `<meta ${a}="${k}" content="${esc(v)}">
 </head>
 <body>
 <div id="app" data-catalogue="/${dataName}">${body}</div>
-${CORNERS.map(c => `<div class="corner" data-of="${c}" aria-hidden="true"></div>`).join("")}
 </body>
 </html>
 `;
