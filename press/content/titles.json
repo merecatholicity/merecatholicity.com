@@ -4841,6 +4841,76 @@
     ]
   },
   {
+    "slug": "journals-of-lewis-and-clark",
+    "title": "The Journals of Lewis and Clark",
+    "subtitle": "Volume 1: From Fort Mandan to the Pacific, 1803–1806",
+    "author": "Meriwether Lewis and William Clark",
+    "format": "Paperback",
+    "listed": "2026-11-27",
+    "cover": "journals-of-lewis-and-clark",
+    "collection": {
+      "slug": "lerins-america",
+      "no": 50,
+      "part": "frontier"
+    },
+    "lead": [
+      "The Journals of Lewis and Clark from Fort Mandan to the Pacific and the winter at Fort Clatsop, every entry whole, with Jefferson’s instructions of 1803 and Lewis’s letters home."
+    ],
+    "description": [
+      "In April 1805 a little company of some thirty men, with Sacagawea and her infant son, left the Mandan villages on the upper Missouri in two pirogues and six small canoes and turned west into country no American had mapped. Lewis wrote that evening that they were about to enter a country ’on which the foot of civilized man had never trodden’. This volume follows them in their own journals from that morning to the shore of the Pacific and the first winter at Fort Clatsop. Meriwether Lewis carries the story up the Missouri, past the grizzly bears and the White Cliffs, around the Great Falls he called ’the grandest sight I ever beheld’, and over the Great Divide to the Shoshone camp where Sacagawea met her brother. William Clark carries it on over the snows of the Bitterroots and down the Snake and the Columbia to the November morning he wrote of ’great joy in camp’ at the sight of the ocean.",
+      "The captains wrote every evening, by firelight and in the rain, and they wrote as they spoke. Their spelling is their own and is kept here: the Ocian, the musquetors, the butifull plains. Their entries hold the hunting and the hunger, the portages around the falls, the broken canoes, the councils with the nations along the river, the bargaining for horses and salmon, the sickness and the cold, and the steady courage of a small company two thousand miles from help. Jefferson’s instructions of 1803 open the book and tell the reader what the captains were sent to find. Lewis’s letter from Fort Mandan marks the start of the journey into the unknown, and his report from St. Louis in September 1806 tells the President that the whole party had come home. The men they write of have names and faces: Drouillard the hunter, the Field brothers, Shields the smith, Cruzatte with his fiddle, York, and Charbonneau and his wife.",
+      "This edition prints the journals whole for the days it covers, from the text of the original notebooks first published in 1904 and 1905: Lewis’s journal from Fort Mandan to the Shoshones, Clark’s from the Lemhi to the sea, and both captains through the first weeks at Fort Clatsop, to the New Year of 1806. The Editors of the Mere Catholicity Project add an introduction on the expedition and its journals, a note on the text, and notes on the people, nations, rivers, animals, plants, tools and words of 1805, with a map of the route, a glossary of the captains’ terms and an index. It is the first of three volumes of The Frontier in Their Own Words."
+    ],
+    "contents": [
+      {
+        "items": [
+          "Introduction",
+          "A Note on the Text",
+          "Map of the Route"
+        ]
+      },
+      {
+        "part": "Part I. The Charge, 1803-1805",
+        "items": [
+          "Instructions to Captain Meriwether Lewis, Thomas Jefferson (20 June 1803)",
+          "Letter to Thomas Jefferson, Fort Mandan, Meriwether Lewis (7 April 1805)"
+        ]
+      },
+      {
+        "part": "Part II. Up the Missouri to the Great Divide: the Journal of Meriwether Lewis",
+        "items": [
+          "Fort Mandan to the Yellowstone (7 April - 5 May 1805)",
+          "The Yellowstone to the Great Divide: the Great Falls and the Three Forks (6 May - 20 August 1805)",
+          "Among the Shoshones (21-26 August 1805)"
+        ]
+      },
+      {
+        "part": "Part III. Over the Bitterroots and Down the Columbia: the Journal of William Clark",
+        "items": [
+          "From the Lemhi to the Pacific (27 August - 21 November 1805)"
+        ]
+      },
+      {
+        "part": "Part IV. Fort Clatsop",
+        "items": [
+          "The Winter on the Pacific, William Clark and Meriwether Lewis (22 November 1805 - 6 January 1806)"
+        ]
+      },
+      {
+        "part": "Part V. Home Again",
+        "items": [
+          "Letter to Thomas Jefferson, St. Louis, Meriwether Lewis (23 September 1806)"
+        ]
+      },
+      {
+        "items": [
+          "Glossary",
+          "Index"
+        ]
+      }
+    ]
+  },
+  {
     "slug": "the-reformed-catholic-reader-1",
     "title": "The Reformed Catholic Reader, Volume I",
     "subtitle": "Calvin on the Church, Baptism, and the Supper",
