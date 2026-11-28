@@ -580,6 +580,7 @@ main > .filter:first-child { margin-top: 18px; }
 .rec-actions { align-items: center; }
 .rec-buy { flex-direction: column; gap: 6px; }
 .rec-buy .btn { align-self: stretch; }
+.rec-buy .rec-aff { align-self: center; font-size: 0.7rem; }
 .btn-small { padding: 7px 12px; font-size: 0.82rem; }
 .rec-aff { font: 0.78rem var(--font-sans); letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
 

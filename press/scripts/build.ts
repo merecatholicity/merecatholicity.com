@@ -51,14 +51,19 @@ for (const t of titles) {
   t.coverSize = [1000, Math.round(h * 1000 / w)];
 }
 
-// The Bibles page's covers, the same way (no wash: they are on no carousel).
-for (const r of press.bibles.items) {
-  for (const f of [`${r.cover}.webp`, `${r.cover}-480.webp`, `${r.cover}-360.webp`, `${r.cover}.jpg`]) {
-    try { statSync(join(ROOT, "content/covers", f)); }
-    catch { throw new Error(`bibles/${r.slug}: missing content/covers/${f} (make cover)`); }
+// The recommendation shelves' covers, the same way (no wash: they are on no carousel). A shelf's
+// address is /<slug>/, so it may not take a word the site's own pages use.
+const TAKEN = new Set(["about", "contact", "privacy", "terms", "collections", "titles", "covers", "assets", "fonts"]);
+for (const shelf of press.recommended) {
+  if (TAKEN.has(shelf.slug)) throw new Error(`recommended/${shelf.slug}: the site's own address`);
+  for (const r of shelf.items) {
+    for (const f of [`${r.cover}.webp`, `${r.cover}-480.webp`, `${r.cover}-360.webp`, `${r.cover}.jpg`]) {
+      try { statSync(join(ROOT, "content/covers", f)); }
+      catch { throw new Error(`${shelf.slug}/${r.slug}: missing content/covers/${f} (make placeholders)`); }
+    }
+    const [w, h] = jpegSize(readFileSync(join(ROOT, "content/covers", `${r.cover}.jpg`)));
+    r.coverSize = [1000, Math.round(h * 1000 / w)];
   }
-  const [w, h] = jpegSize(readFileSync(join(ROOT, "content/covers", `${r.cover}.jpg`)));
-  r.coverSize = [1000, Math.round(h * 1000 / w)];
 }
 
 rmSync(DIST, { recursive: true, force: true });
@@ -83,14 +88,14 @@ writeFileSync(join(DIST, jsName), jsText);
 // names it by a placeholder the build fills. A name with a character the cut lacks is refused.
 const FONTS = join(ROOT, "node_modules/@fontsource/cinzel");
 const fontChars = new Set(read("content/fonts/cinzel-chars.txt"));
-for (const name of [press.name, press.originals.name, press.bibles.name, ...press.collections.map(c => `${c.name} Collection`)])
+for (const name of [press.name, press.originals.name, ...press.recommended.map(r => r.name), ...press.collections.map(c => `${c.name} Collection`)])
   for (const ch of name)
     if (!fontChars.has(ch)) throw new Error(`"${name}": "${ch}" is not in content/fonts/cinzel-chars.txt (run scripts/subset-cinzel.sh)`);
 const font = readFileSync(join(ROOT, "content/fonts/cinzel-500-subset.woff2"));
 const fontName = `assets/cinzel-500-${hash(font)}.woff2`;
 writeFileSync(join(DIST, fontName), font);
 cpSync(join(FONTS, "LICENSE"), join(DIST, "assets/cinzel-OFL.txt"));
-// The Bibles' thanks heading's script (Pinyon Script, SIL OFL): its Latin cut alone, named by
+// The recommendation shelves' thanks heading's script (Pinyon Script, SIL OFL): its Latin cut alone, named by
 // its hash, and fetched only by a page that sets it.
 const script = readFileSync(join(ROOT, "node_modules/@fontsource/pinyon-script/files/pinyon-script-latin-400-normal.woff2"));
 const scriptName = `assets/pinyon-script-400-${hash(script)}.woff2`;
@@ -164,8 +169,9 @@ ${headTags(meta, cat).map(([a, k, v]) => `<meta ${a}="${k}" content="${esc(v)}">
 }
 
 const routes: Route[] = [{ kind: "home" }, { kind: "about" }, { kind: "contact" }, { kind: "privacy" }, { kind: "terms" },
-  ...shelves(cat).map(collection => ({ kind: "collection" as const, collection })), { kind: "bibles" },
-  ...press.bibles.items.map(bible => ({ kind: "bible" as const, bible })),
+  ...shelves(cat).map(collection => ({ kind: "collection" as const, collection })), 
+  ...press.recommended.flatMap(shelf => [{ kind: "recs" as const, shelf },
+    ...shelf.items.map(item => ({ kind: "rec" as const, shelf, item }))]),
   ...titles.map(title => ({ kind: "title" as const, title }))];
 for (const route of routes) {
   const dir = join(DIST, pathOf(route));

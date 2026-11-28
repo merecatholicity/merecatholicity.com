@@ -37,184 +37,368 @@
     ],
     "parts": []
   },
-  "bibles": {
-    "slug": "bibles",
-    "name": "Bibles",
-    "short": "Bibles",
-    "tagline": "Editions of Holy Scripture the press recommends",
+  "recommended": [
+    {
+      "slug": "bibles",
+      "name": "Bibles",
+      "short": "Bibles",
+      "tagline": "Editions of Holy Scripture the press recommends",
+      "about": [
+        "Lérins Press does not print the Bible. These are editions from other publishers that we recommend for reading and study beside our own books."
+      ],
+      "items": [
+        {
+          "slug": "noab-rsv-8914a",
+          "title": "The New Oxford Annotated Bible with the Apocrypha",
+          "subtitle": "Revised Standard Version, Expanded Edition",
+          "publisher": "Oxford University Press",
+          "cover": "bible-noab-rsv-8914a",
+          "buy": [
+            {
+              "format": "Leatherbound",
+              "url": "https://www.amazon.com/dp/019528335X?linkCode=ll2&tag=lerinspress-20&linkId=de89156471a2bc3fed6c9f01dda5b82d&language=en_US&ref_=as_li_ss_tl"
+            },
+            {
+              "format": "Hardcover",
+              "url": "https://www.amazon.com/dp/0195283481?linkCode=ll2&tag=lerinspress-20&linkId=b7f2b895eb014cdaa49aee77449fe5c1&language=en_US&ref_=as_li_ss_tl"
+            }
+          ],
+          "lead": [
+            "For decades the most widely used study Bible in American schools, colleges, seminaries and universities, made for readers of every tradition."
+          ],
+          "description": [
+            "The New Oxford Annotated Bible is Oxford's study edition of the Revised Standard Version, the translation it was first made for. Every book has its own introduction and running notes on the page, and the volume adds supplementary articles and maps to guide the reader through the text.",
+            "The notes are edited by Bruce Metzger, a Presbyterian minister and one of the finest New Testament Greek scholars of his age, and the expanded Apocrypha carries the books the ancient communions count as Scripture, so Roman, Orthodox, and Protestant readers can open the same volume. The RSV itself is the last of the great common translations before gender-neutral revision, and it keeps thee and thou in address to God. A solid conservative and ecumenical pick.",
+            "It is offered in two bindings: genuine black leather (8914A), which comes in a protective two-piece box, and hardcover."
+          ]
+        },
+        {
+          "slug": "kjv-cameo-kj455xra",
+          "title": "The Cameo Reference Bible with the Apocrypha",
+          "subtitle": "King James Version, Red-Letter Edition",
+          "publisher": "Cambridge University Press",
+          "binding": "Black calfskin leather (KJ455:XRA)",
+          "cover": "bible-kjv-cameo-kj455xra",
+          "buy": [
+            {
+              "format": "Leatherbound",
+              "url": "https://www.amazon.com/dp/1107608074?linkCode=ll2&tag=lerinspress-20&linkId=28c08c9b592ffa1dee09246e0ed1500d&language=en_US&ref_=as_li_ss_tl"
+            }
+          ],
+          "lead": [
+            "One of the classic Cambridge editions of the King James Bible, first set in the 1920s and one of the very few in print today with the Apocrypha."
+          ],
+          "description": [
+            "Cambridge set the Cameo in a historic typeface, Petit Medieval Clarendon, large enough to read with ease and small enough for a compact Bible. Long out of print, it was reissued in answer to readers who kept asking for it.",
+            "The text carries full cross-references, pronunciation marks for difficult names and words, and the words of Christ in red, with a concordance and fifteen colour maps at the back. It prints the Apocrypha, as the King James Bible of 1611 did. This copy is on India paper with art-gilt edges, bound in black calfskin."
+          ]
+        },
+        {
+          "slug": "geneva-1560-facsimile",
+          "title": "The Geneva Bible",
+          "subtitle": "Geneva Version, 1560 First Edition Facsimile",
+          "publisher": "The Bible Museum",
+          "binding": "Burgundy",
+          "cover": "bible-geneva-1560-facsimile",
+          "buy": [
+            {
+              "format": "Hardcover",
+              "url": "https://www.amazon.com/dp/B0B2ZQX32N?linkCode=ll2&tag=lerinspress-20&linkId=6b47d032f5e7126ae036d1d64bf8fb5d&language=en_US&ref_=as_li_ss_tl"
+            }
+          ],
+          "lead": [
+            "The Bible of Shakespeare, the Puritans and the Pilgrims, the most widely read English Bible of its century, reproduced page for page from the first edition."
+          ],
+          "description": [
+            "English Protestants who fled to Geneva under Mary I made this translation there and printed it in 1560. It was the first complete English Bible divided into numbered verses, and for some eighty years it was the Bible most English households read. It came to America with the Pilgrims and the Puritans.",
+            "Its marginal notes, some 300,000 words in all, carried the teaching of the Reformed churches and did much to make it loved. The bishops never adopted it, and James I called some of its notes seditious, which led in time to the King James Version. The first edition's woodcuts and maps are here, with the Old Testament, the Apocrypha and the New Testament complete.",
+            "This facsimile is digitally remastered and slightly enlarged for easier reading, with nothing of the content altered."
+          ]
+        },
+        {
+          "slug": "douay-rheims-large",
+          "title": "The Douay-Rheims Bible",
+          "subtitle": "Challoner Revision, Large Size Edition",
+          "publisher": "Baronius Press",
+          "binding": "Flexible black leather",
+          "cover": "bible-douay-rheims-large",
+          "buy": [
+            {
+              "format": "Leatherbound",
+              "url": "https://www.amazon.com/dp/1905574681?linkCode=ll2&tag=lerinspress-20&linkId=526d182243651f8fd743f7ea7f0948cc&language=en_US&ref_=as_li_ss_tl"
+            }
+          ],
+          "lead": [
+            "The traditional Catholic Bible in English, newly typeset from the edition of 1899 and bound in leather."
+          ],
+          "description": [
+            "English Catholic exiles at Douai and Rheims translated the Bible from the Latin Vulgate, the New Testament in 1582 and the Old in 1609 and 1610. Bishop Richard Challoner revised it in the 1750s, and in his revision it was the Bible of English-speaking Catholics for some two hundred years.",
+            "Baronius Press has set the 1899 edition again in clear modern type, so it reads far more easily than the old facsimiles. It adds eleven newly drawn colour maps, thirty-two engravings of scenes from sacred history and a family register. This copy is bound in flexible black leather with stitched edges, gilt page edges and two ribbons."
+          ]
+        },
+        {
+          "slug": "ignatius-catholic-study",
+          "title": "The Ignatius Catholic Study Bible",
+          "subtitle": "Revised Standard Version, Second Catholic Edition",
+          "publisher": "Ignatius Press",
+          "cover": "bible-ignatius-study",
+          "buy": [
+            {
+              "format": "Bonded leather",
+              "url": "https://www.amazon.com/dp/1586176145?linkCode=ll2&tag=lerinspress-20&linkId=58d57c36dbbfba3a034a6a42de08582c&language=en_US&ref_=as_li_ss_tl"
+            },
+            {
+              "format": "Hardcover",
+              "url": "https://www.amazon.com/dp/1621648761?linkCode=ll2&tag=lerinspress-20&linkId=f4a3aa81918c96b4e12b5cef450f499d&language=en_US&ref_=as_li_ss_tl"
+            }
+          ],
+          "lead": [
+            "The whole of Scripture in one volume with a full Catholic apparatus, edited by Scott Hahn and Curtis Mitch."
+          ],
+          "description": [
+            "Ignatius Press gathered its long-running Catholic study Bible into a single volume, in the Revised Standard Version, Second Catholic Edition. Every book of the Bible has its own introduction and outline, and more than 17,000 notes run beneath the text, chapter by chapter.",
+            "The notes explain the history, culture and language behind the text, and draw on the Fathers, the Doctors and the councils for its teaching. They point to the Catechism of the Catholic Church at some 1,700 places. Between the books stand topical essays, word studies of the key terms, charts and some fifty maps.",
+            "Scott Hahn is the general editor and Curtis Mitch co-editor, with a team of Catholic Scripture scholars from the Augustine Institute, Franciscan University, Sacred Heart Major Seminary and other schools. The text is set in 10-point type, the notes in 8."
+          ]
+        },
+        {
+          "slug": "orthodox-study",
+          "title": "The Orthodox Study Bible",
+          "subtitle": "Septuagint and New King James Version",
+          "publisher": "Thomas Nelson",
+          "cover": "bible-orthodox-study",
+          "buy": [
+            {
+              "format": "Leatherbound",
+              "url": "https://www.amazon.com/dp/1400357586?linkCode=ll2&tag=lerinspress-20&linkId=fef380abd162bacb7fa0ace7fbbc0b17&language=en_US&ref_=as_li_ss_tl"
+            },
+            {
+              "format": "Hardcover",
+              "url": "https://www.amazon.com/dp/0718003594?linkCode=ll2&tag=lerinspress-20&linkId=b8df6e7c59ba6394d99dfcdddc22abe6&language=en_US&ref_=as_li_ss_tl"
+            }
+          ],
+          "lead": [
+            "The Bible of the Orthodox Church in English, its Old Testament from the Septuagint, with notes drawn from the Fathers of the first ten centuries."
+          ],
+          "description": [
+            "A team of Orthodox scholars and pastors from across the jurisdictions prepared this study Bible, first published complete in 2008. Its Old Testament is a new translation from the Septuagint, the Greek Old Testament the early Church read, with the deuterocanonical books. Its New Testament is the New King James Version.",
+            "The commentary is drawn from the Christian writers and teachers of the first ten centuries after Christ. Every book has an introduction and an outline, and the notes tie the text to the Church's seasons of feasting and fasting. The volume adds a subject index to the notes, a lectionary for reading through the Church year, morning and evening prayers, articles on the books, the saints of the Old Testament and Christology, and full-colour icons.",
+            "It is offered in two bindings: black genuine leather, and hardcover."
+          ]
+        },
+        {
+          "slug": "esv-study",
+          "title": "The ESV Study Bible",
+          "subtitle": "English Standard Version",
+          "publisher": "Crossway",
+          "cover": "bible-esv-study",
+          "buy": [
+            {
+              "format": "Leatherbound",
+              "url": "https://www.amazon.com/dp/1433502445?linkCode=ll2&tag=lerinspress-20&linkId=2a1caed1acbaf48afb8e75e7f1f3b544&language=en_US&ref_=as_li_ss_tl"
+            },
+            {
+              "format": "Hardcover",
+              "url": "https://www.amazon.com/dp/1433502410?linkCode=ll2&tag=lerinspress-20&linkId=fd12eba4077e3b27ad69b779c637950f&language=en_US&ref_=as_li_ss_tl"
+            }
+          ],
+          "lead": [
+            "The study Bible of the English Standard Version, made by some ninety-five scholars and teachers from nine countries and nearly twenty denominations."
+          ],
+          "description": [
+            "Crossway first published the ESV Study Bible in 2008, with Wayne Grudem as general editor and J. I. Packer as theological editor. Its contributors came from some fifty seminaries, colleges and universities, and it was named the Christian Book of the Year.",
+            "Some 20,000 study notes run beneath the text, on every page. The volume adds introductions to every book, more than 200 charts and timelines, some 240 full-colour maps and illustrations, more than fifty articles on doctrine and on reading the Bible, and profiles of the people of Scripture. It is Smyth-sewn and set in 9-point type.",
+            "It is offered in two bindings: black genuine leather with gilt edges, and hardcover."
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "catechisms",
+      "name": "Catechisms",
+      "short": "Catechisms",
+      "tagline": "Catechisms of the faith the press recommends",
+      "about": [
+        "Lérins Press does not print these catechisms. They are editions from other publishers that we recommend for learning the faith beside our own books."
+      ],
+      "items": [
+        {
+          "slug": "catechism-of-trent",
+          "title": "The Catechism of the Council of Trent",
+          "subtitle": "The Roman Catechism, Published by Order of St. Pius V",
+          "publisher": "Baronius Press",
+          "cover": "catechism-trent",
+          "buy": [
+            {
+              "format": "Hardcover",
+              "url": "https://www.amazon.com/dp/1905574355?linkCode=ll2&tag=lerinspress-20&linkId=73b1ad6c36c7b46dc4768ba807afe49e&language=en_US&ref_=as_li_ss_tl"
+            }
+          ],
+          "lead": [
+            "The catechism the Council of Trent called for and St. Pius V published in 1566, written for parish priests to teach the faith from."
+          ],
+          "description": [
+            "The Council of Trent asked for a catechism for the clergy, and it appeared in 1566 by order of Pope St. Pius V, which is why it is also called the Roman Catechism. It was made in the years of the Reformation to set out the Catholic faith clearly and calmly in the face of Protestant objections.",
+            "It follows the old order of instruction: the Creed, the sacraments, the Ten Commandments and the Lord's Prayer. It remains one of the fullest compendiums of the Church's traditional belief and life. This edition is a hardcover of 608 pages."
+          ]
+        },
+        {
+          "slug": "my-catholic-faith",
+          "title": "My Catholic Faith",
+          "subtitle": "The 1954 Edition",
+          "publisher": "Sarto House",
+          "cover": "catechism-my-catholic-faith",
+          "buy": [
+            {
+              "format": "Hardcover",
+              "url": "https://www.amazon.com/dp/0963903268?linkCode=ll2&tag=lerinspress-20&linkId=970f6a34ac798509743614e74157e5e6&language=en_US&ref_=as_li_ss_tl"
+            }
+          ],
+          "lead": [
+            "Bishop Louis LaRavoire Morrow's illustrated catechism, long a family favourite, in its classic 1954 edition."
+          ],
+          "description": [
+            "It teaches the faith in 193 short chapters in three parts: what to believe, what to do, and the means of grace. The text is full of quotations from Scripture, with charts, lists and diagrams, and pictures throughout.",
+            "It treats the nature of the Church and the Holy Sacrifice of the Mass at length. This edition is bound in a burgundy hardcover stamped in gold."
+          ]
+        },
+        {
+          "slug": "longer-catechism-philaret",
+          "title": "The Longer Catechism of the Eastern Orthodox Church",
+          "subtitle": "The Catechism of St. Philaret of Moscow",
+          "publisher": "Independently published",
+          "cover": "catechism-philaret",
+          "buy": [
+            {
+              "format": "Paperback",
+              "url": "https://www.amazon.com/dp/B08J5HHWX9?linkCode=ll2&tag=lerinspress-20&linkId=92b69a07965a261bbf215b4ca0835908&language=en_US&ref_=as_li_ss_tl"
+            },
+            {
+              "format": "Hardcover",
+              "url": "https://www.amazon.com/dp/B0BJX13DTM?linkCode=ll2&tag=lerinspress-20&linkId=8a46091d7fe974ca4763065e683a0548&language=en_US&ref_=as_li_ss_tl"
+            }
+          ],
+          "lead": [
+            "St. Philaret of Moscow's catechism of the Orthodox faith and way of life, in 611 questions and answers."
+          ],
+          "description": [
+            "St. Philaret, Metropolitan of Moscow, wrote the Longer Catechism to help the faithful understand the essentials of the Orthodox faith. It builds on the three pillars of faith, hope and love: under faith it treats the Creed, under hope the Lord's Prayer and the Beatitudes, and under love the Ten Commandments.",
+            "Its answers are short and exact. Christian hope, it says, is “the resting of the heart on God, with the full trust that he ever cares for our salvation, and will give us the happiness he has promised.” This edition adds his Shorter Catechism and a sermon of his on the Cross of Christ.",
+            "It is offered in two bindings: paperback, and hardcover."
+          ]
+        },
+        {
+          "slug": "holy-standards",
+          "title": "The Holy Standards",
+          "subtitle": "The Creeds, Confessions of Faith, and Catechisms of the Eastern Orthodox Church",
+          "publisher": "Independently published",
+          "cover": "catechism-holy-standards",
+          "buy": [
+            {
+              "format": "Paperback",
+              "url": "https://www.amazon.com/dp/B08MHPYQGK?linkCode=ll2&tag=lerinspress-20&linkId=913083da266df9230fa6ddbcd0b5b588&language=en_US&ref_=as_li_ss_tl"
+            },
+            {
+              "format": "Hardcover",
+              "url": "https://www.amazon.com/dp/B0BJYJTG1Z?linkCode=ll2&tag=lerinspress-20&linkId=45ad3957ce9f935acd9dfc298fe321e7&language=en_US&ref_=as_li_ss_tl"
+            }
+          ],
+          "lead": [
+            "The Orthodox Church's creeds, confessions and catechisms gathered in one volume, its compiler says for the first time in English."
+          ],
+          "description": [
+            "It holds the Nicene-Constantinopolitan Creed, the Athanasian Creed, the Confession of Chalcedon, the Confession of Dositheus, the Shorter and Longer Catechisms of St. Philaret of Moscow, the Catechism of St. Peter Mogila, and the Synodikon of Orthodoxy.",
+            "These are the statements of faith the Orthodox Church has formally approved, put together for the instruction of the faithful: summaries of the faith that have stood the test of time, in the Church's own words rather than any one writer's.",
+            "It is offered in two bindings: paperback, and hardcover."
+          ]
+        },
+        {
+          "slug": "luthers-small-catechism",
+          "title": "Luther's Small Catechism with Explanation",
+          "subtitle": "2017 Edition",
+          "publisher": "Concordia Publishing House",
+          "cover": "catechism-luther-small",
+          "buy": [
+            {
+              "format": "Hardcover",
+              "url": "https://www.amazon.com/dp/0758660243?linkCode=ll2&tag=lerinspress-20&linkId=4bb98180cff927489796615315e7a203&language=en_US&ref_=as_li_ss_tl"
+            }
+          ],
+          "lead": [
+            "Martin Luther's Small Catechism, the Lutheran churches' book of instruction for nearly five centuries, with a full Explanation in question and answer."
+          ],
+          "description": [
+            "Luther wrote the Small Catechism for households and their heads to teach the faith at home. It sets out the Six Chief Parts of Christian doctrine: the Ten Commandments, the Apostles' Creed, the Lord's Prayer, Holy Baptism, Confession and the Office of the Keys, and the Sacrament of the Altar, teaching throughout the Law that shows sin and the Gospel that forgives it.",
+            "This 2017 edition from Concordia adds an Explanation of more than 300 questions and answers with over 1,000 Scripture references, drawn from Scripture and the Lutheran Confessions. It also gives prayers, psalms, hymns and table blessings, guidance for Holy Communion, the Table of Duties, and appendices on the Church year, with a glossary and indexes. It is a hardcover."
+          ]
+        },
+        {
+          "slug": "westminster-standards",
+          "title": "The Westminster Confession of Faith and Catechisms",
+          "subtitle": "As Adopted by the Presbyterian Church in America, with Proof Texts",
+          "publisher": "Christian Education and Publications",
+          "cover": "catechism-westminster",
+          "buy": [
+            {
+              "format": "Hardcover",
+              "url": "https://www.amazon.com/dp/0979377005?linkCode=ll2&tag=lerinspress-20&linkId=cc70d4461cfe193508c2e5683a683ea1&language=en_US&ref_=as_li_ss_tl"
+            }
+          ],
+          "lead": [
+            "The Westminster Standards, the Confession with the Larger and Shorter Catechisms, in the text the Presbyterian Church in America has adopted."
+          ],
+          "description": [
+            "The Westminster Assembly drew up the Confession of Faith in 1646 and the Larger and Shorter Catechisms in 1647, and they have been the doctrinal standards of the Presbyterian churches ever since.",
+            "This edition prints all three in the form adopted by the General Assembly of the Presbyterian Church in America, with the Scripture proof texts set out in full from the King James Version. It is a small hardcover, 4¾ by 7¼ inches, made to be carried."
+          ]
+        },
+        {
+          "slug": "three-forms-of-unity",
+          "title": "The Three Forms of Unity",
+          "subtitle": "Belgic Confession of Faith, Heidelberg Catechism & Canons of Dort",
+          "publisher": "Solid Ground Christian Books",
+          "cover": "catechism-three-forms",
+          "buy": [
+            {
+              "format": "Paperback",
+              "url": "https://www.amazon.com/dp/159925378X?linkCode=ll2&tag=lerinspress-20&linkId=25ed940e8fd05d9c43e546a6cf762f29&language=en_US&ref_=as_li_ss_tl"
+            }
+          ],
+          "lead": [
+            "The doctrinal standards of the Dutch Reformed churches, the Belgic Confession, the Heidelberg Catechism and the Canons of Dort, in one small volume."
+          ],
+          "description": [
+            "Guido de Brès wrote the Belgic Confession in 1561, the Heidelberg Catechism was published in 1563, and the Synod of Dort drew up its Canons in 1618 and 1619. Together they became the Three Forms of Unity, the common confession of the Reformed churches of the Netherlands and their daughters abroad.",
+            "This edition is the one edited and introduced by Joel Beeke of Puritan Reformed Theological Seminary, with a Scripture index. It adds the three ecumenical creeds: the Apostles’, the Nicene and the Athanasian. It is a paperback of 176 pages."
+          ]
+        },
+        {
+          "slug": "book-of-common-prayer-1928",
+          "title": "The 1928 Book of Common Prayer",
+          "publisher": "Oxford University Press",
+          "cover": "catechism-bcp-1928",
+          "buy": [
+            {
+              "format": "Hardcover",
+              "url": "https://www.amazon.com/dp/0195285069?linkCode=ll2&tag=lerinspress-20&linkId=ff51fd842bb349ea9a6d68de3656a503&language=en_US&ref_=as_li_ss_tl"
+            }
+          ],
+          "lead": [
+            "The traditional American prayer book, its catechism set in the Offices of Instruction, in the majesty of the King James tongue."
+          ],
+          "description": [
+            "The Book of Common Prayer of 1928 was the prayer book of the Episcopal Church until 1979 and is still the book of many traditional Anglicans. Beside the daily offices, the Holy Communion and the Psalter, it carries the Church's catechism in the Offices of Instruction, where the Creed, the Commandments, the Lord's Prayer and the sacraments are taught by question and answer.",
+            "This Oxford edition adds presentation pages with certificates of Baptism, Confirmation and Marriage. It is bound in a burgundy hardcover stamped with a gold cross."
+          ]
+        }
+      ]
+    }
+  ],
+  "affiliate": {
     "tag": "lerinspress-20",
-    "about": [
-      "Lérins Press does not print the Bible. These are editions from other publishers that we recommend for reading and study beside our own books."
-    ],
     "thanks": [
       "Thank you for buying through these links. The Amazon links here are affiliate links: when you buy through one, Amazon pays a small commission, **at no extra cost to you, and it helps support the Mere Catholicity Project.** We are grateful for every one.",
       "As an Amazon Associate, Lérins Press earns from qualifying purchases."
-    ],
-    "items": [
-      {
-        "slug": "noab-rsv-8914a",
-        "title": "The New Oxford Annotated Bible with the Apocrypha",
-        "subtitle": "Revised Standard Version, Expanded Edition",
-        "publisher": "Oxford University Press",
-        "cover": "bible-noab-rsv-8914a",
-        "buy": [
-          {
-            "format": "Leatherbound",
-            "url": "https://www.amazon.com/dp/019528335X?linkCode=ll2&tag=lerinspress-20&linkId=de89156471a2bc3fed6c9f01dda5b82d&language=en_US&ref_=as_li_ss_tl"
-          },
-          {
-            "format": "Hardcover",
-            "url": "https://www.amazon.com/dp/0195283481?linkCode=ll2&tag=lerinspress-20&linkId=b7f2b895eb014cdaa49aee77449fe5c1&language=en_US&ref_=as_li_ss_tl"
-          }
-        ],
-        "lead": [
-          "For decades the most widely used study Bible in American schools, colleges, seminaries and universities, made for readers of every tradition."
-        ],
-        "description": [
-          "The New Oxford Annotated Bible is Oxford's study edition of the Revised Standard Version, the translation it was first made for. Every book has its own introduction and running notes on the page, and the volume adds supplementary articles and maps to guide the reader through the text.",
-          "The notes are edited by Bruce Metzger, a Presbyterian minister and one of the finest New Testament Greek scholars of his age, and the expanded Apocrypha carries the books the ancient communions count as Scripture, so Roman, Orthodox, and Protestant readers can open the same volume. The RSV itself is the last of the great common translations before gender-neutral revision, and it keeps thee and thou in address to God. A solid conservative and ecumenical pick.",
-          "It is offered in two bindings: genuine black leather (8914A), which comes in a protective two-piece box, and hardcover."
-        ]
-      },
-      {
-        "slug": "kjv-cameo-kj455xra",
-        "title": "The Cameo Reference Bible with the Apocrypha",
-        "subtitle": "King James Version, Red-Letter Edition",
-        "publisher": "Cambridge University Press",
-        "binding": "Black calfskin leather (KJ455:XRA)",
-        "cover": "bible-kjv-cameo-kj455xra",
-        "buy": [
-          {
-            "format": "Leatherbound",
-            "url": "https://www.amazon.com/dp/1107608074?linkCode=ll2&tag=lerinspress-20&linkId=28c08c9b592ffa1dee09246e0ed1500d&language=en_US&ref_=as_li_ss_tl"
-          }
-        ],
-        "lead": [
-          "One of the classic Cambridge editions of the King James Bible, first set in the 1920s and one of the very few in print today with the Apocrypha."
-        ],
-        "description": [
-          "Cambridge set the Cameo in a historic typeface, Petit Medieval Clarendon, large enough to read with ease and small enough for a compact Bible. Long out of print, it was reissued in answer to readers who kept asking for it.",
-          "The text carries full cross-references, pronunciation marks for difficult names and words, and the words of Christ in red, with a concordance and fifteen colour maps at the back. It prints the Apocrypha, as the King James Bible of 1611 did. This copy is on India paper with art-gilt edges, bound in black calfskin."
-        ]
-      },
-      {
-        "slug": "geneva-1560-facsimile",
-        "title": "The Geneva Bible",
-        "subtitle": "Geneva Version, 1560 First Edition Facsimile",
-        "publisher": "The Bible Museum",
-        "binding": "Burgundy",
-        "cover": "bible-geneva-1560-facsimile",
-        "buy": [
-          {
-            "format": "Hardcover",
-            "url": "https://www.amazon.com/dp/B0B2ZQX32N?linkCode=ll2&tag=lerinspress-20&linkId=6b47d032f5e7126ae036d1d64bf8fb5d&language=en_US&ref_=as_li_ss_tl"
-          }
-        ],
-        "lead": [
-          "The Bible of Shakespeare, the Puritans and the Pilgrims, the most widely read English Bible of its century, reproduced page for page from the first edition."
-        ],
-        "description": [
-          "English Protestants who fled to Geneva under Mary I made this translation there and printed it in 1560. It was the first complete English Bible divided into numbered verses, and for some eighty years it was the Bible most English households read. It came to America with the Pilgrims and the Puritans.",
-          "Its marginal notes, some 300,000 words in all, carried the teaching of the Reformed churches and did much to make it loved. The bishops never adopted it, and James I called some of its notes seditious, which led in time to the King James Version. The first edition's woodcuts and maps are here, with the Old Testament, the Apocrypha and the New Testament complete.",
-          "This facsimile is digitally remastered and slightly enlarged for easier reading, with nothing of the content altered."
-        ]
-      },
-      {
-        "slug": "douay-rheims-large",
-        "title": "The Douay-Rheims Bible",
-        "subtitle": "Challoner Revision, Large Size Edition",
-        "publisher": "Baronius Press",
-        "binding": "Flexible black leather",
-        "cover": "bible-douay-rheims-large",
-        "buy": [
-          {
-            "format": "Leatherbound",
-            "url": "https://www.amazon.com/dp/1905574681?linkCode=ll2&tag=lerinspress-20&linkId=526d182243651f8fd743f7ea7f0948cc&language=en_US&ref_=as_li_ss_tl"
-          }
-        ],
-        "lead": [
-          "The traditional Catholic Bible in English, newly typeset from the edition of 1899 and bound in leather."
-        ],
-        "description": [
-          "English Catholic exiles at Douai and Rheims translated the Bible from the Latin Vulgate, the New Testament in 1582 and the Old in 1609 and 1610. Bishop Richard Challoner revised it in the 1750s, and in his revision it was the Bible of English-speaking Catholics for some two hundred years.",
-          "Baronius Press has set the 1899 edition again in clear modern type, so it reads far more easily than the old facsimiles. It adds eleven newly drawn colour maps, thirty-two engravings of scenes from sacred history and a family register. This copy is bound in flexible black leather with stitched edges, gilt page edges and two ribbons."
-        ]
-      },
-      {
-        "slug": "ignatius-catholic-study",
-        "title": "The Ignatius Catholic Study Bible",
-        "subtitle": "Revised Standard Version, Second Catholic Edition",
-        "publisher": "Ignatius Press",
-        "cover": "bible-ignatius-study",
-        "buy": [
-          {
-            "format": "Bonded leather",
-            "url": "https://www.amazon.com/dp/1586176145?linkCode=ll2&tag=lerinspress-20&linkId=58d57c36dbbfba3a034a6a42de08582c&language=en_US&ref_=as_li_ss_tl"
-          },
-          {
-            "format": "Hardcover",
-            "url": "https://www.amazon.com/dp/1621648761?linkCode=ll2&tag=lerinspress-20&linkId=f4a3aa81918c96b4e12b5cef450f499d&language=en_US&ref_=as_li_ss_tl"
-          }
-        ],
-        "lead": [
-          "The whole of Scripture in one volume with a full Catholic apparatus, edited by Scott Hahn and Curtis Mitch."
-        ],
-        "description": [
-          "Ignatius Press gathered its long-running Catholic study Bible into a single volume, in the Revised Standard Version, Second Catholic Edition. Every book of the Bible has its own introduction and outline, and more than 17,000 notes run beneath the text, chapter by chapter.",
-          "The notes explain the history, culture and language behind the text, and draw on the Fathers, the Doctors and the councils for its teaching. They point to the Catechism of the Catholic Church at some 1,700 places. Between the books stand topical essays, word studies of the key terms, charts and some fifty maps.",
-          "Scott Hahn is the general editor and Curtis Mitch co-editor, with a team of Catholic Scripture scholars from the Augustine Institute, Franciscan University, Sacred Heart Major Seminary and other schools. The text is set in 10-point type, the notes in 8."
-        ]
-      },
-      {
-        "slug": "orthodox-study",
-        "title": "The Orthodox Study Bible",
-        "subtitle": "Septuagint and New King James Version",
-        "publisher": "Thomas Nelson",
-        "cover": "bible-orthodox-study",
-        "buy": [
-          {
-            "format": "Leatherbound",
-            "url": "https://www.amazon.com/dp/1400357586?linkCode=ll2&tag=lerinspress-20&linkId=fef380abd162bacb7fa0ace7fbbc0b17&language=en_US&ref_=as_li_ss_tl"
-          },
-          {
-            "format": "Hardcover",
-            "url": "https://www.amazon.com/dp/0718003594?linkCode=ll2&tag=lerinspress-20&linkId=b8df6e7c59ba6394d99dfcdddc22abe6&language=en_US&ref_=as_li_ss_tl"
-          }
-        ],
-        "lead": [
-          "The Bible of the Orthodox Church in English, its Old Testament from the Septuagint, with notes drawn from the Fathers of the first ten centuries."
-        ],
-        "description": [
-          "A team of Orthodox scholars and pastors from across the jurisdictions prepared this study Bible, first published complete in 2008. Its Old Testament is a new translation from the Septuagint, the Greek Old Testament the early Church read, with the deuterocanonical books. Its New Testament is the New King James Version.",
-          "The commentary is drawn from the Christian writers and teachers of the first ten centuries after Christ. Every book has an introduction and an outline, and the notes tie the text to the Church's seasons of feasting and fasting. The volume adds a subject index to the notes, a lectionary for reading through the Church year, morning and evening prayers, articles on the books, the saints of the Old Testament and Christology, and full-colour icons.",
-          "It is offered in two bindings: black genuine leather, and hardcover."
-        ]
-      },
-      {
-        "slug": "esv-study",
-        "title": "The ESV Study Bible",
-        "subtitle": "English Standard Version",
-        "publisher": "Crossway",
-        "cover": "bible-esv-study",
-        "buy": [
-          {
-            "format": "Leatherbound",
-            "url": "https://www.amazon.com/dp/1433502445?linkCode=ll2&tag=lerinspress-20&linkId=2a1caed1acbaf48afb8e75e7f1f3b544&language=en_US&ref_=as_li_ss_tl"
-          },
-          {
-            "format": "Hardcover",
-            "url": "https://www.amazon.com/dp/1433502410?linkCode=ll2&tag=lerinspress-20&linkId=fd12eba4077e3b27ad69b779c637950f&language=en_US&ref_=as_li_ss_tl"
-          }
-        ],
-        "lead": [
-          "The study Bible of the English Standard Version, made by some ninety-five scholars and teachers from nine countries and nearly twenty denominations."
-        ],
-        "description": [
-          "Crossway first published the ESV Study Bible in 2008, with Wayne Grudem as general editor and J. I. Packer as theological editor. Its contributors came from some fifty seminaries, colleges and universities, and it was named the Christian Book of the Year.",
-          "Some 20,000 study notes run beneath the text, on every page. The volume adds introductions to every book, more than 200 charts and timelines, some 240 full-colour maps and illustrations, more than fifty articles on doctrine and on reading the Bible, and profiles of the people of Scripture. It is Smyth-sewn and set in 9-point type.",
-          "It is offered in two bindings: black genuine leather with gilt edges, and hardcover."
-        ]
-      }
     ]
   },
   "collections": [
