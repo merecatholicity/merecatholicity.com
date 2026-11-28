@@ -4983,6 +4983,48 @@
     ]
   },
   {
+    "slug": "my-life-on-the-plains",
+    "title": "My Life on the Plains",
+    "subtitle": "Volume 3: Personal Experiences with Indians, 1867–1869",
+    "author": "George Armstrong Custer",
+    "format": "Paperback",
+    "listed": "2026-11-27",
+    "cover": "my-life-on-the-plains",
+    "collection": {
+      "slug": "lerins-america",
+      "no": 52,
+      "part": "frontier"
+    },
+    "lead": [
+      "George Armstrong Custer’s My Life on the Plains, whole: the cavalry’s war on the southern Plains from the Hancock expedition of 1867 to the Washita and the winter campaign of 1868-1869."
+    ],
+    "description": [
+      "In 1867 Lieutenant Colonel George Armstrong Custer, not yet thirty and lately a major general of the Civil War, rode west with the new Seventh Cavalry to the Plains of Kansas. Five years later he began to write it down for the readers of The Galaxy, and in 1874, two years before the Little Bighorn, the chapters came out as this book. It is the frontier soldier’s own account of a hard country and a hard war: the long marches, the dry camps and the blizzards, the buffalo herds, the wagon trains and stage stations under attack, and the settlers of the Kansas border who looked to the army for their safety. Custer opens with the Plains themselves, the ’Great American Desert’ of the schoolbooks, and with the tide of emigration he saw moving across it toward the setting sun.",
+      "Custer writes quickly and with an eye for the scene. He describes the scouts he rode with, Wild Bill Hickok, California Joe and the Osage trailers, the officers and troopers of his regiment, and the chiefs he met in council and in battle. The heart of the book is the winter campaign of 1868-1869: the snowbound march to the Washita, the dawn attack on Black Kettle’s village, and the long pursuit across the Texas Panhandle that ended with the release of two captive white women and the surrender of the Cheyennes. The book holds his own long reflections on the Plains nations, on the treaties, and on the government’s policy toward them. He names the places as his men knew them, Camp Supply, the Wichita Mountains and the Sweetwater, and he does not hide the cold, the hunger or the losses of his own command.",
+      "This edition prints My Life on the Plains whole, from the first book edition, published in New York in 1874, with Custer’s spelling of names kept. The Editors of the Mere Catholicity Project add an introduction on Custer’s years on the Plains, the Seventh Cavalry and the book, and notes on the people, forts, rivers, regiments, weapons and treaties named in the text, set beside the dates of the campaigns, with a map of the southern Plains, a glossary of army and frontier terms and an index. It is the third of three volumes of The Frontier in Their Own Words."
+    ],
+    "contents": [
+      {
+        "items": [
+          "Introduction",
+          "A Note on the Text",
+          "Map of the Southern Plains, 1867-1869"
+        ]
+      },
+      {
+        "items": [
+          "My Life on the Plains; or, Personal Experiences with Indians, by George Armstrong Custer (1874)"
+        ]
+      },
+      {
+        "items": [
+          "Glossary",
+          "Index"
+        ]
+      }
+    ]
+  },
+  {
     "slug": "the-reformed-catholic-reader-1",
     "title": "The Reformed Catholic Reader, Volume I",
     "subtitle": "Calvin on the Church, Baptism, and the Supper",
