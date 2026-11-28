@@ -5089,6 +5089,58 @@
     ]
   },
   {
+    "slug": "confederate-civilians",
+    "title": "Confederate Civilians",
+    "subtitle": "Volume 10: A Girl’s Diary and a Blockaded Family, 1861–1865",
+    "author": "Sarah Morgan Dawson and Parthenia Antoinette Hague",
+    "format": "Paperback",
+    "listed": "2026-11-27",
+    "cover": "confederate-civilians",
+    "collection": {
+      "slug": "lerins-america",
+      "no": 54,
+      "part": "confederacy"
+    },
+    "lead": [
+      "Two Confederate women of the home front in their own words: Sarah Morgan’s A Confederate Girl’s Diary, kept in Baton Rouge and New Orleans from 1862 to 1865, and Parthenia Antoinette Hague’s A Blockaded Family, on life in southern Alabama under the blockade."
+    ],
+    "description": [
+      "Sarah Morgan, a daughter of Judge Thomas Gibbes Morgan of Baton Rouge, began her diary on March 9, 1862. Her brothers were in the Confederate service, and two of them, George and Gibbes, did not come home. She wrote through the fall of New Orleans, the Federal shelling and occupation of Baton Rouge, the morning of August 5, 1862, when Breckinridge’s men drove the Federal pickets into the town and the ram Arkansas was looked for on the river, and her family’s flight to the plantations of Westover and Linwood and the town of Clinton. In April 1863 she crossed by Madisonville and Bonfouca into occupied New Orleans, where she wrote to the war’s end. On the first day of 1863 she noted, \"I learn, to my unspeakable grief, that the State House is burned down,\" and her last entry, of June 15, 1865, begins, \"Our Confederacy has gone with one crash.\" Reading her notebooks again at Charleston in July 1896, she added a closing word that \"God never failed me.\" Her son, Warrington Dawson, published the diary in 1913 as A Confederate Girl’s Diary.",
+      "Parthenia Antoinette Hague spent the war as a schoolteacher on a plantation near Eufaula, Alabama, and published her recollections in 1888 as A Blockaded Family. She tells how a Southern household met the blockade: how cloth was dyed and woven, how shoes, hats, thread, bonnets and buttons were made at home, what stood in for coffee and tea, and how the spinning wheels ran by the fireside. She writes of the plantation’s slaves, their weddings and barbecues, of homespun weddings, of the approach of the Northern army, of pillage and plunder, and of the return of the vanquished. She closes in 1888 with the South rebuilding \"amid the ruins left by the army who were the conquerors.\" Together the two books give the war of the Confederate civilian, the town under occupation and the farm behind the lines, the one written day by day as the news came, the other remembered twenty years on.",
+      "This tenth volume of The Confederacy in Their Own Words prints both books whole, A Confederate Girl’s Diary from the Houghton Mifflin edition of 1913 with Sarah Morgan’s own notes, and A Blockaded Family from the Houghton, Mifflin edition of 1888. The 1913 diary is the selection her son made from her notebooks, and the introduction says what he chose and how. The Editors of the Mere Catholicity Project add an introduction on the two writers and their country, and notes that explain the persons, places, military events, household arts and old words of the text, with a glossary and an index."
+    ],
+    "contents": [
+      {
+        "items": [
+          "Introduction",
+          "A Note on the Text"
+        ]
+      },
+      {
+        "part": "Part One. A Confederate Girl's Diary, by Sarah Morgan Dawson (1862-1865)",
+        "items": [
+          "Book I. Baton Rouge (March-June 1862)",
+          "Book II (June-August 1862)",
+          "Book III. Westover, Linwood and Clinton (August 1862-January 1863)",
+          "Book IV. Linwood, Madisonville and New Orleans (January-August 1863)",
+          "Book V. New Orleans (August 1863-June 1865)"
+        ]
+      },
+      {
+        "part": "Part Two. A Blockaded Family: Life in Southern Alabama During the Civil War, by Parthenia Antoinette Hague (1888)",
+        "items": [
+          "Chapters I-XIV, from the Beginnings of the Secession Movement to Repairing Damages"
+        ]
+      },
+      {
+        "items": [
+          "Glossary",
+          "Index"
+        ]
+      }
+    ]
+  },
+  {
     "slug": "the-reformed-catholic-reader-1",
     "title": "The Reformed Catholic Reader, Volume I",
     "subtitle": "Calvin on the Church, Baptism, and the Supper",
