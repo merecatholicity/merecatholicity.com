@@ -4176,6 +4176,51 @@
     ]
   },
   {
+    "slug": "of-plymouth-plantation",
+    "title": "Of Plymouth Plantation",
+    "subtitle": "The Pilgrims’ Own History, 1606–1650",
+    "author": "William Bradford",
+    "format": "Paperback",
+    "listed": "2026-11-27",
+    "cover": "of-plymouth-plantation",
+    "collection": {
+      "slug": "lerins-america",
+      "no": 40,
+      "part": "colonies"
+    },
+    "lead": [
+      "William Bradford’s Of Plymouth Plantation (in his own spelling, Of Plimoth Plantation) printed whole from the manuscript edition of 1898: the Scrooby church and the years at Leiden, the Mayflower and the Compact, and the annals of Plymouth to 1647, with Bradford’s list of the first comers."
+    ],
+    "description": [
+      "William Bradford was a young man of the Scrooby congregation that left England for Holland in 1608, and a man of thirty when he crossed in the Mayflower in 1620. He was chosen governor of Plymouth in the spring of 1621, after John Carver died, and was governor in most years until his own death in 1657. About 1630 he began to write the colony’s history, “in a plaine stile, with singuler regard unto ye simple trueth in all things.” His First Book tells why the church left England, its twelve years at Leiden, the hard bargain with the merchants and the voyage, and how, when they left Leiden, “they knew they were pilgrimes.” It ends with the landing at Cape Cod, where “they fell upon their knees & blessed ye God of heaven.” His Second Book follows Plymouth year by year from the Compact signed aboard ship and the first winter, when half of the company died, to 1647, when his annals stop with the headings of two years he never filled.",
+      "Bradford writes as the colony’s governor and as a believer who reads every event as God’s providence. The reader meets Squanto and Massasoit and the first harvest, the end of the common store in 1623, Weston’s unruly men, Thomas Morton’s maypole at Merrymount, the long debts to the London partners, the trading posts on the Kennebec and the Connecticut, the Pequot War of 1637, the troubles and punishments of 1642, and the slow scattering of the first church into new towns. Looking back on the colony’s beginnings he wrote that “as one small candle may light a thousand, so ye light here kindled hath shone to many.” Bradford copies into his pages the letters and agreements of the time, so that John Robinson, Robert Cushman, Edward Winslow and the merchant adventurers speak in their own words. At the end he set down the names of all who came in the Mayflower in 1620, and what had become of each family by 1650, the roll that Mayflower families still read.",
+      "This edition prints the whole history as Bradford wrote it, from the Commonwealth of Massachusetts edition of 1898, which was printed from the manuscript itself after the manuscript came home from the Bishop of London’s library in 1897. It keeps Bradford’s own notes, his spelling and abbreviations, his list of the first comers, and the royal commission of 1634 that he copied into the manuscript. The Editors of the Mere Catholicity Project add a new introduction on Bradford, the separatist church at Scrooby and Leiden, and the journey of the manuscript, and notes on the people, places, ships, money, Scripture and old words the reader meets, with a glossary and an index. It is the second of three volumes of the colonies in their founders’ own words, after Captain John Smith’s Generall Historie of Virginia, and before Massachusetts Bay in the words of John Winthrop, Mary Rowlandson and Cotton Mather."
+    ],
+    "contents": [
+      {
+        "items": [
+          "Introduction",
+          "A Note on the Text"
+        ]
+      },
+      {
+        "part": "Of Plymouth Plantation, by William Bradford",
+        "items": [
+          "The First Book: The Church at Scrooby and Leiden and the Voyage, 1606-1620",
+          "The Second Book: The Annals of Plymouth, 1620-1647",
+          "The Names of Those Which Came Over First, in the Year 1620, with Their Decreasings and Increasings (1650)",
+          "The Commission for Regulating Plantations (1634)"
+        ]
+      },
+      {
+        "items": [
+          "Glossary",
+          "Index"
+        ]
+      }
+    ]
+  },
+  {
     "slug": "the-reformed-catholic-reader-1",
     "title": "The Reformed Catholic Reader, Volume I",
     "subtitle": "Calvin on the Church, Baptism, and the Supper",
