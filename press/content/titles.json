@@ -4415,6 +4415,55 @@
     ]
   },
   {
+    "slug": "patriot-soldiers",
+    "title": "Patriot Soldiers and the War",
+    "subtitle": "Volume 3: Joseph Plumb Martin, Ethan Allen and John Joseph Henry, 1775–1783",
+    "author": "Patriot Soldiers",
+    "format": "Paperback",
+    "listed": "2026-11-27",
+    "cover": "patriot-soldiers",
+    "collection": {
+      "slug": "lerins-america",
+      "no": 44,
+      "part": "patriots"
+    },
+    "lead": [
+      "The Continental soldier’s war in his own words, 1775 to 1783: Joseph Plumb Martin’s Narrative of a Revolutionary Soldier (1830), whole, with Ethan Allen’s Narrative of his captivity (1779) and John Joseph Henry’s account of Arnold’s march to Quebec (1812)."
+    ],
+    "description": [
+      "Joseph Plumb Martin was fifteen when he enlisted in Connecticut in 1776, and he served to the end of the war: the retreat from Long Island and the rout at Kip’s Bay, the winter at Valley Forge, the heat of Monmouth, and the trenches at Yorktown as a sergeant of sappers and miners. In 1830, an old farmer in Maine, he wrote it all down, plainly and often with dry humour, the marching, the hunger, the cold and the officers, and printed it without his name. “Great men get great praise, little men, nothing.” His Narrative, printed here whole, is the fullest account of the war by a private soldier of the Continental line. He wrote for any reader who cared to know what the private soldiers bore, and he spared neither the commissaries, nor the officers, nor himself. Little noticed for more than a century after it appeared, it is now the book most often quoted on the common soldier of the Revolution.",
+      "The volume opens in the north in 1775 with two other men who spoke for themselves. Ethan Allen, who took Ticonderoga “in the name of the great Jehovah, and the Continental Congress”, was captured before Montreal that autumn and carried in irons to England and back, and his Narrative of 1779 tells his captivity to his exchange in 1778. John Joseph Henry, a Lancaster rifleman of sixteen, marched with Arnold from Newburyport up the Kennebec and through the wilderness to Quebec, was taken in the assault on the last night of 1775, and told the march in old age in a book printed the year after his death, with a life of him written by his daughter. Allen’s book was printed in Philadelphia in 1779, the year after his exchange, and was reprinted many times before his death in 1789. Henry, who later sat as a judge in Pennsylvania, tells of the bateaux on the Kennebec, the hunger of the march and the fighting in the streets of the Lower Town.",
+      "This is the third volume of The Patriots in Their Own Words. It faces Loyalist Soldiers and the War, where Simcoe of the Queen’s Rangers, James Moody, David Fanning and Alexander Chesney tell the same war from the other side. Each narrative is printed whole from its first edition, with its authors’ own notes. The introduction follows each man after the war: Martin’s long years as a poor farmer in Maine, Allen’s Vermont, and Henry’s years on the bench. The Editors of the Mere Catholicity Project add an introduction on the authors and the campaigns, and headnotes that place each chapter in the war. Notes explain the people, places, regiments, ranks, weapons and old words the reader meets, and a glossary and an index close the volume. The two volumes meet at Yorktown, where Martin dug the trenches and Simcoe’s Rangers held Gloucester across the river, and in the raids and outpost fighting of New Jersey and the Hudson. The authors’ spelling is kept, and their own notes are marked as theirs."
+    ],
+    "contents": [
+      {
+        "items": [
+          "Introduction",
+          "A Note on the Text"
+        ]
+      },
+      {
+        "part": "Part One. Canada, 1775-1778",
+        "items": [
+          "John Joseph Henry, An Accurate and Interesting Account of the Campaign against Quebec in 1775, with the Life of the Author (1812)",
+          "Ethan Allen, A Narrative of Colonel Ethan Allen’s Captivity (1779)"
+        ]
+      },
+      {
+        "part": "Part Two. A Private Soldier's War, 1776-1783",
+        "items": [
+          "Joseph Plumb Martin, A Narrative of Some of the Adventures, Dangers and Sufferings of a Revolutionary Soldier (1830)"
+        ]
+      },
+      {
+        "items": [
+          "Glossary",
+          "Index"
+        ]
+      }
+    ]
+  },
+  {
     "slug": "the-reformed-catholic-reader-1",
     "title": "The Reformed Catholic Reader, Volume I",
     "subtitle": "Calvin on the Church, Baptism, and the Supper",
