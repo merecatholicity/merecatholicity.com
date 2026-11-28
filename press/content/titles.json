@@ -4128,6 +4128,54 @@
     ]
   },
   {
+    "slug": "generall-historie-of-virginia",
+    "title": "The Generall Historie of Virginia, New-England, and the Summer Isles",
+    "subtitle": "Jamestown, Pocahontas, New England and the Bermudas, 1584–1624",
+    "author": "Captain John Smith",
+    "format": "Paperback",
+    "listed": "2026-11-27",
+    "cover": "generall-historie-of-virginia",
+    "collection": {
+      "slug": "lerins-america",
+      "no": 39,
+      "part": "colonies"
+    },
+    "lead": [
+      "Captain John Smith’s Generall Historie of Virginia, New-England, and the Summer Isles (1624), printed whole in its six books: the voyages before Jamestown, the founding of Virginia and Pocahontas, the colony to 1624, the Bermudas and the first years of New England."
+    ],
+    "description": [
+      "Captain John Smith sailed with the Virginia Company’s colonists from London in December 1606 and landed with them on the James River in May 1607. In the first winter he was taken prisoner by Opechancanough, brought before the great chief Powhatan, and spared, he wrote, when Pocahontas, the chief’s daughter, “got his head in her armes, and laid her owne upon his to save him from death.” In September 1608 he was made president of the council, and he told the idle men of the fort that “he that will not worke shall not eate.” A year later, badly burned by gunpowder, he went home to England and never saw Virginia again. In 1614 he sailed to the northern coast, mapped it, and gave it the name New England in the book he printed of it. In 1624, as the King took Virginia from the Company, Smith printed his Generall Historie in London, the story of England’s first three colonies from the Roanoke voyages of 1584 to that year.",
+      "The book is in six parts. The First Book gathers the voyages before Jamestown, from Raleigh’s Roanoke colonies and the lost colonists to the coasting voyages of 1602 to 1605. The Second describes the Chesapeake country, its rivers, beasts and fruits, and Powhatan’s people, their towns, dress, worship and war. The Third tells the founding of Jamestown from 1606 to 1609, much of it written and signed by the men who were there with Smith. The Fourth carries Virginia from the starving time through Dale’s government, the marriage of Pocahontas and John Rolfe, her death at Gravesend in 1617, the first tobacco years and the rising of March 1622, to the end of the Company. The Fifth tells the Bermudas, settled after the wreck of the Sea Venture, and the Sixth tells New England, with Smith’s own voyage of 1614 and the first years of Plymouth. Smith writes as a soldier and a planter, plainly, with a fighting man’s opinions and a promoter’s hopes for the country.",
+      "This edition prints the Generall Historie whole, in Smith’s own spelling, from the text of 1624 as it was reprinted in 1907, with his dedication to the Duchess of Richmond, his Preface of Four Points and the verses his friends wrote for the book, and with Smith’s marginal notes, which give dates, names and his own asides. Nothing is cut from any of the six books. The Editors of the Mere Catholicity Project add a new introduction on Smith, the Virginia Company and the making of the book, naming the relations of other men that Smith gathered into it. Notes explain the people, places, ships, offices, Powhatan words and old English words the reader meets, and a glossary and an index close the volume. It is the first of three volumes of the colonies in their founders’ own words. William Bradford’s Of Plimoth Plantation follows, and then Massachusetts Bay in the words of John Winthrop, Mary Rowlandson and Cotton Mather."
+    ],
+    "contents": [
+      {
+        "items": [
+          "Introduction",
+          "A Note on the Text"
+        ]
+      },
+      {
+        "part": "The Generall Historie of Virginia, New-England, and the Summer Isles (1624)",
+        "items": [
+          "The Epistle Dedicatory, A Preface of Four Points, and Commendatory Verses",
+          "The First Book: The Voyages to Virginia before Jamestown, 1584-1605",
+          "The Second Book: A Description of Virginia and Its People",
+          "The Third Book: The Proceedings and Accidents of the English Colony in Virginia, 1606-1609",
+          "The Fourth Book: Virginia from 1609 to 1624",
+          "The Fifth Book: The Bermudas, Now Called the Summer Isles",
+          "The Sixth Book: New England, 1614-1624"
+        ]
+      },
+      {
+        "items": [
+          "Glossary",
+          "Index"
+        ]
+      }
+    ]
+  },
+  {
     "slug": "the-reformed-catholic-reader-1",
     "title": "The Reformed Catholic Reader, Volume I",
     "subtitle": "Calvin on the Church, Baptism, and the Supper",
