@@ -74,6 +74,21 @@ class Ledger(unittest.TestCase):
         self.assertIn('In print: <em>Mere Catholicity</em>', pages['charting-communions.html'])
 
 
+class Places(unittest.TestCase):
+    def test_the_community_front_carries_its_ledger_book_and_its_rooms_none(self):
+        with open(os.path.join(m.ROOT, 'app', 'views', 'board.ts'), encoding='utf-8') as f:
+            src = f.read()
+        book = LEDGER['books'][LEDGER['places']['community']]
+        url = m.amazon_url(book['asin'], book['link_id']).replace('&amp;', '&')
+        self.assertEqual(src.count(url), 1, 'board.ts must carry the ledger\'s community book once')
+        self.assertIn('rel="sponsored noopener"', src)
+        self.assertIn('As an Amazon Associate we earn from qualifying purchases.', src)
+        # only the index renders it: the category view and its threads stay clean
+        index, cat = src.split("customElements.define('mc-board-index'")
+        self.assertIn('${summaTpl}', index)
+        self.assertNotIn('${summaTpl}', cat)
+
+
 class Placement(unittest.TestCase):
     def test_one_box_after_the_title_block(self):
         out = m.inject(PANDOC, m.door(LEDGER['doors']['press-catechisms']))
@@ -82,18 +97,18 @@ class Placement(unittest.TestCase):
         self.assertLess(out.index('mc-support'), out.index('<nav id="TOC">'))
 
     def test_a_content_page_takes_it_after_its_h1(self):
-        out = m.inject(CONTENT, m.affiliate(LEDGER['books']['city-of-god-bettenson']))
+        out = m.inject(CONTENT, m.affiliate(LEDGER['books']['summa-dominican-5vol']))
         self.assertLess(out.index('</h1>'), out.index('mc-support'))
         self.assertLess(out.index('mc-support'), out.index('<p>Text.</p>'))
 
     def test_a_second_run_changes_nothing_and_a_new_box_replaces_the_old(self):
-        a = m.affiliate(LEDGER['books']['city-of-god-bettenson'])
+        a = m.affiliate(LEDGER['books']['summa-dominican-5vol'])
         b = m.door(LEDGER['doors']['press-bibles'])
         once = m.inject(PANDOC, a)
         self.assertEqual(m.inject(once, a), once)
         swapped = m.inject(once, b)
         self.assertEqual(swapped.count(m.FENCE_OPEN), 1)
-        self.assertNotIn('0140448942', swapped)
+        self.assertNotIn('0870610635', swapped)
 
     def test_a_page_with_no_title_is_left_alone(self):
         bare = '<body><p>No header here.</p></body>'

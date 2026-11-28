@@ -158,6 +158,7 @@ on page one.)
 - **The corpus sweeps know pandoc by its prefix, so a current pandoc builds the same site (2026-11-04)** — `log/2026-11.md`
 - **The Scripture and confession pages carry the press's thanks box, a door to its recommended books or an Amazon affiliate link (2026-11-28)** — `log/2026-11.md`
 - **Every Library work's door to print reads one ledger, content/affiliate.json (2026-11-28)** — `log/2026-11.md`
+- **Our bookstore first, Amazon second; and the board's front page carries the Summa (2026-11-28)** — `log/2026-11.md`
 
 ### The PureScript application layer
 

@@ -1,5 +1,5 @@
 {
- "about": "The Library's doors to print, one record (scripts/inject_support.py reads it; the scraping-amazon-affiliate-link skill writes it). books: Amazon affiliate boxes, each a SiteStripe link (asin + linkId, tag lerinspress-20). doors: boxes to the press's recommendation shelves. shelves: each Library shelf's catch-all (a book, a door, or \"lerins:<slug>\" for our own edition on sale) (its overview and every work without its own). works: a page's own book or door, {lerins: slug} for our own edition's card, {miss: why, date} for a search that found no good edition, {hand: why} for a page that carries a box written by hand.",
+ "about": "The Library's doors to print, one record (scripts/inject_support.py reads it; the scraping-amazon-affiliate-link skill writes it). books: Amazon affiliate boxes, each a SiteStripe link (asin + linkId, tag lerinspress-20). doors: boxes to the press's recommendation shelves. shelves: each Library shelf's catch-all (a book, a door, or \"lerins:<slug>\" for our own edition on sale) (its overview and every work without its own). works: a page's own book or door, {lerins: slug} for our own edition's card, {miss: why, date} for a search that found no good edition, {hand: why} for a page that carries a box written by hand. places: an app page that carries a book outside the Library (community: the board's front page, its box written in app/views/board.ts and held to this entry by the test).",
  "books": {
   "summa-dominican-5vol": {
    "asin": "0870610635",
@@ -7,23 +7,11 @@
    "words": "Would you like the Summa in print? The English Dominican translation read here comes as a five-volume hardcover set.",
    "label": "Buy on Amazon (Hardcover, 5 volumes)"
   },
-  "city-of-god-bettenson": {
-   "asin": "0140448942",
-   "link_id": "d6fec6cec769956677626c8b4b4b0569",
-   "words": "Would you like Augustine in print? <em>The City of God</em>, in Henry Bettenson&rsquo;s translation, is in paperback from Penguin Classics.",
-   "label": "Buy the City of God on Amazon (Paperback)"
-  },
   "luther-galatians-crossway": {
    "asin": "0891079947",
    "link_id": "27d85a7d1b8ac7ec67011b8178a37100",
    "words": "Would you like Luther&rsquo;s <em>Galatians</em> in print? The Crossway Classic Commentaries edition, edited by Alister McGrath and J. I. Packer, is in paperback.",
    "label": "Buy Luther on Galatians on Amazon (Paperback)"
-  },
-  "calvin-institutes-hendrickson": {
-   "asin": "1598561685",
-   "link_id": "f4c070a1aad3d30d438050ac44cbf6f3",
-   "words": "Would you like the <em>Institutes</em> in print? Henry Beveridge&rsquo;s translation, the one read here, is in one hardcover volume from Hendrickson.",
-   "label": "Buy the Institutes on Amazon (Hardcover)"
   },
   "jewel-apology-davenant": {
    "asin": "194971604X",
@@ -78,6 +66,30 @@
    "link_id": "2558bb221378769ac2f62ee1735ae9a2",
    "words": "Would you like Gregory of Nyssa in print? <em>On the Soul and the Resurrection</em> is in St Vladimir&rsquo;s Seminary Press&rsquo;s Popular Patristics series, in paperback.",
    "label": "Buy On the Soul and the Resurrection on Amazon (Paperback)"
+  },
+  "athanasius-festal-lup": {
+   "asin": "1835538088",
+   "link_id": "19e1db1060708832ce1ba077513bd4e3",
+   "words": "Would you like Athanasius&rsquo;s Festal Letters in print? <em>The Festal Letters of Athanasius of Alexandria</em>, translated by David Brakke and David M. Gwynn, is in paperback from Liverpool University Press.",
+   "label": "Buy the Festal Letters on Amazon (Paperback)"
+  },
+  "leo-letters-cua": {
+   "asin": "0813214033",
+   "link_id": "e4f1bd05a3418cbd9ceb1b55cc56f6d6",
+   "words": "Would you like the Tome in print? St. Leo&rsquo;s <em>Letters</em>, where the Tome is Letter 28, are in the Catholic University of America Press&rsquo;s Fathers of the Church series.",
+   "label": "Buy Leo&rsquo;s Letters on Amazon (Paperback)"
+  },
+  "augustine-teaching-owc": {
+   "asin": "0199540632",
+   "link_id": "42ec216fa80675da2b101a1c9bef1918",
+   "words": "Would you like <em>On Christian Doctrine</em> in print? R. P. H. Green&rsquo;s translation, <em>On Christian Teaching</em>, is in paperback from Oxford World&rsquo;s Classics.",
+   "label": "Buy On Christian Teaching on Amazon (Paperback)"
+  },
+  "augustine-enchiridion-cua": {
+   "asin": "0813213185",
+   "link_id": "4ce61bb2c78dfe2bed37dd080432e038",
+   "words": "Would you like the <em>Enchiridion</em> in print? It is in the Catholic University of America Press&rsquo;s Fathers of the Church series as <em>Faith, Hope and Charity</em>, with three more of Augustine&rsquo;s works.",
+   "label": "Buy the Enchiridion on Amazon (Paperback)"
   }
  },
  "doors": {
@@ -97,11 +109,11 @@
  "shelves": {
   "scripture": "press-bibles",
   "creeds": "press-catechisms",
-  "fathers": "city-of-god-bettenson",
-  "schaff": "city-of-god-bettenson",
+  "fathers": "lerins:the-city-of-god",
+  "schaff": "lerins:the-city-of-god",
   "aquinas": "summa-dominican-5vol",
   "newman": "lerins:newman-development",
-  "reformers": "calvin-institutes-hendrickson",
+  "reformers": "lerins:calvin-institutes",
   "apologetics": "lerins:heretics-and-orthodoxy",
   "papers": "lerins:mere-catholicity",
   "councils": "councils-davis"
@@ -375,6 +387,181 @@
   },
   "law.html": {
    "lerins": "a-serious-call-to-a-devout-and-holy-life"
+  },
+  "iliad.html": {
+   "lerins": "the-iliad"
+  },
+  "odyssey.html": {
+   "lerins": "the-odyssey"
+  },
+  "republic.html": {
+   "lerins": "the-republic"
+  },
+  "marcus.html": {
+   "lerins": "meditations"
+  },
+  "festal39.html": "athanasius-festal-lup",
+  "tome.html": "leo-letters-cua",
+  "ondoctrine.html": "augustine-teaching-owc",
+  "enchiridion.html": "augustine-enchiridion-cua",
+  "onbaptism.html": {
+   "miss": "no sanely priced name-brand edition: New City Press Works of Augustine I/21 The Donatist Controversy I (has On Baptism) is $65.71 hardcover, sold by Amazon (over the $60 limit)",
+   "date": "2026-11-28"
+  },
+  "gregory-letters.html": {
+   "miss": "no in-print edition of Gregory the Great letters on Amazon (Martyn PIMS 3-vol Letters not listed; only mills and Dialogues/Pastoral Rule)",
+   "date": "2026-11-28"
+  },
+  "anf01.html": {
+   "miss": "no Hendrickson single volume on Amazon: ten-plus searches by volume title and 'Hendrickson' surfaced no ASIN of ISBN prefix 156563 or 159856; the only Hendrickson listing is the 14-volume set page (1565630947), no buy box (see all buying options: $287.15 / $388.50 third-party)",
+   "date": "2026-11-28"
+  },
+  "anf02.html": {
+   "miss": "no Hendrickson single volume on Amazon: ten-plus searches by volume title and 'Hendrickson' surfaced no ASIN of ISBN prefix 156563 or 159856; the only Hendrickson listing is the 14-volume set page (1565630947), no buy box (see all buying options: $287.15 / $388.50 third-party)",
+   "date": "2026-11-28"
+  },
+  "anf03.html": {
+   "miss": "no Hendrickson single volume on Amazon: ten-plus searches by volume title and 'Hendrickson' surfaced no ASIN of ISBN prefix 156563 or 159856; the only Hendrickson listing is the 14-volume set page (1565630947), no buy box (see all buying options: $287.15 / $388.50 third-party)",
+   "date": "2026-11-28"
+  },
+  "anf04.html": {
+   "miss": "no Hendrickson single volume on Amazon: ten-plus searches by volume title and 'Hendrickson' surfaced no ASIN of ISBN prefix 156563 or 159856; the only Hendrickson listing is the 14-volume set page (1565630947), no buy box (see all buying options: $287.15 / $388.50 third-party)",
+   "date": "2026-11-28"
+  },
+  "anf05.html": {
+   "miss": "no Hendrickson single volume on Amazon: ten-plus searches by volume title and 'Hendrickson' surfaced no ASIN of ISBN prefix 156563 or 159856; the only Hendrickson listing is the 14-volume set page (1565630947), no buy box (see all buying options: $287.15 / $388.50 third-party)",
+   "date": "2026-11-28"
+  },
+  "anf06.html": {
+   "miss": "no Hendrickson single volume on Amazon: ten-plus searches by volume title and 'Hendrickson' surfaced no ASIN of ISBN prefix 156563 or 159856; the only Hendrickson listing is the 14-volume set page (1565630947), no buy box (see all buying options: $287.15 / $388.50 third-party)",
+   "date": "2026-11-28"
+  },
+  "anf07.html": {
+   "miss": "no Hendrickson single volume on Amazon: ten-plus searches by volume title and 'Hendrickson' surfaced no ASIN of ISBN prefix 156563 or 159856; the only Hendrickson listing is the 14-volume set page (1565630947), no buy box (see all buying options: $287.15 / $388.50 third-party)",
+   "date": "2026-11-28"
+  },
+  "anf08.html": {
+   "miss": "no Hendrickson single volume on Amazon: ten-plus searches by volume title and 'Hendrickson' surfaced no ASIN of ISBN prefix 156563 or 159856; the only Hendrickson listing is the 14-volume set page (1565630947), no buy box (see all buying options: $287.15 / $388.50 third-party)",
+   "date": "2026-11-28"
+  },
+  "anf09.html": {
+   "miss": "no Hendrickson single volume on Amazon: ten-plus searches by volume title and 'Hendrickson' surfaced no ASIN of ISBN prefix 156563 or 159856; the only Hendrickson listing is the 14-volume set page (1565630947), no buy box (see all buying options: $287.15 / $388.50 third-party)",
+   "date": "2026-11-28"
+  },
+  "npnf101.html": {
+   "miss": "no Hendrickson single volume on Amazon: ten-plus searches by volume title and 'Hendrickson' surfaced no ASIN of ISBN prefix 156563 or 159856; the only Hendrickson listing is the 14-volume set page (1565630947), no buy box (see all buying options: $287.15 / $388.50 third-party)",
+   "date": "2026-11-28"
+  },
+  "npnf102.html": {
+   "miss": "no Hendrickson single volume on Amazon: ten-plus searches by volume title and 'Hendrickson' surfaced no ASIN of ISBN prefix 156563 or 159856; the only Hendrickson listing is the 14-volume set page (1565630947), no buy box (see all buying options: $287.15 / $388.50 third-party)",
+   "date": "2026-11-28"
+  },
+  "npnf103.html": {
+   "miss": "no Hendrickson single volume on Amazon: ten-plus searches by volume title and 'Hendrickson' surfaced no ASIN of ISBN prefix 156563 or 159856; the only Hendrickson listing is the 14-volume set page (1565630947), no buy box (see all buying options: $287.15 / $388.50 third-party)",
+   "date": "2026-11-28"
+  },
+  "npnf104.html": {
+   "miss": "no Hendrickson single volume on Amazon: ten-plus searches by volume title and 'Hendrickson' surfaced no ASIN of ISBN prefix 156563 or 159856; the only Hendrickson listing is the 14-volume set page (1565630947), no buy box (see all buying options: $287.15 / $388.50 third-party)",
+   "date": "2026-11-28"
+  },
+  "npnf105.html": {
+   "miss": "no Hendrickson single volume on Amazon: ten-plus searches by volume title and 'Hendrickson' surfaced no ASIN of ISBN prefix 156563 or 159856; the only Hendrickson listing is the 14-volume set page (1565630947), no buy box (see all buying options: $287.15 / $388.50 third-party)",
+   "date": "2026-11-28"
+  },
+  "npnf106.html": {
+   "miss": "no Hendrickson single volume on Amazon: ten-plus searches by volume title and 'Hendrickson' surfaced no ASIN of ISBN prefix 156563 or 159856; the only Hendrickson listing is the 14-volume set page (1565630947), no buy box (see all buying options: $287.15 / $388.50 third-party)",
+   "date": "2026-11-28"
+  },
+  "npnf107.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf108.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf109.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf110.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf111.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf112.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf113.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf114.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf201.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf202.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf203.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf204.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf205.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf206.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf207.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf208.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf209.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf210.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf211.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf212.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf213.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
+  },
+  "npnf214.html": {
+   "miss": "Hendrickson no longer sells the volumes singly (batch 3 searched fifteen, found none); only reprint houses",
+   "date": "2026-11-28"
   }
+ },
+ "places": {
+  "community": "summa-dominican-5vol"
  }
 }
