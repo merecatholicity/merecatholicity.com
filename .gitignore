@@ -146,6 +146,7 @@ docs/chunks/
 # the book changes and whenever it is missing from the cached tree.
 docs/Mere_Catholicity_Logos.docx
 docs/style.css
+docs/support.css
 docs/version.json
 docs/pdfs.txt
 docs/sitemap.xml

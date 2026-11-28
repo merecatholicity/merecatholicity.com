@@ -76,6 +76,16 @@ class InjectSupport(unittest.TestCase):
         self.assertIn('rel="sponsored noopener"', m.NEWMAN)
         self.assertIn('As an Amazon Associate we earn from qualifying purchases.', m.NEWMAN)
 
+    def test_every_volume_of_the_fathers_carries_the_city_of_god(self):
+        pages = m.shelf_pages('schaff')
+        self.assertEqual(len(pages), 37)
+        for page in pages:
+            self.assertIs(m.PAGES[page], m.FATHERS, page)
+        for page in m.shelf_pages('fathers'):
+            self.assertIs(m.PAGES[page], m.FATHERS, page)
+        self.assertIn('dp/0140448942?', m.FATHERS)
+        self.assertIn('tag=lerinspress-20', m.FATHERS)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -21,6 +21,9 @@ Two kinds of box, both after the page's title block:
   save where a work is sold in its own good edition (NEWMAN_OWN: the Apologia, the
   Grammar of Assent), which carries that book.
   The Library's Newman view carries it by hand.
+- THE FATHERS BOX on every volume of the Library's complete library of the Fathers
+  (#schaff, read the same way) and every work of the consensus of the Fathers (#fathers):
+  Augustine's City of God in Bettenson's translation.
 - THE EDITION CARD on a work the press prints (the Catena Aurea): the press's shield,
   its name in Cinzel, the work's own line, and a link to its page on the press's site
   (.mc-edition). Our own book, so no affiliate words at all.
@@ -42,6 +45,7 @@ FENCE_CLOSE = '<!--/mc-door-->'
 FENCE_RE = re.compile(re.escape(FENCE_OPEN) + '.*?' + re.escape(FENCE_CLOSE) + r'\n?', re.S)
 
 CATECHISMS = '''<aside class="mc-support" aria-label="Help support the Mere Catholicity Project">
+<link rel="stylesheet" href="support.css">
 <p class="mc-support-heart" aria-hidden="true">&hearts;</p>
 <p class="mc-support-head">With our thanks</p>
 <p>Would you like a catechism in print? Lérins Press keeps a shelf of catechisms
@@ -55,6 +59,7 @@ one.</p>
 
 
 SUMMA = '''<aside class="mc-support" aria-label="Help support the Mere Catholicity Project">
+<link rel="stylesheet" href="support.css">
 <p class="mc-support-heart" aria-hidden="true">&hearts;</p>
 <p class="mc-support-head">With our thanks</p>
 <p>Would you like the Summa in print? The English Dominican translation read
@@ -68,6 +73,7 @@ We are grateful for every one.</p>
 
 
 NEWMAN = '''<aside class="mc-support" aria-label="Help support the Mere Catholicity Project">
+<link rel="stylesheet" href="support.css">
 <p class="mc-support-heart" aria-hidden="true">&hearts;</p>
 <p class="mc-support-head">With our thanks</p>
 <p>Would you like Newman in print? His <em>Essay on the Development of Christian
@@ -88,6 +94,7 @@ def affiliate(words, label, asin, link_id):
     url = (f'https://www.amazon.com/dp/{asin}?linkCode=ll2&amp;tag=lerinspress-20&amp;'
            f'linkId={link_id}&amp;language=en_US&amp;ref_=as_li_ss_tl')
     return f'''<aside class="mc-support" aria-label="Help support the Mere Catholicity Project">
+<link rel="stylesheet" href="support.css">
 <p class="mc-support-heart" aria-hidden="true">&hearts;</p>
 <p class="mc-support-head">With our thanks</p>
 <p>{words} The link below is an Amazon affiliate link: when you buy through it,
@@ -110,12 +117,19 @@ NEWMAN_OWN = {
         'Buy the Grammar of Assent on Amazon (Paperback)', '0268010005',
         '6aeb541c97e4602a56c62e0dbf860734'),
 }
-AFFILIATE = [SUMMA, NEWMAN, *NEWMAN_OWN.values()]
+# The complete library of the Fathers (Schaff's 37 volumes) and the consensus of the Fathers
+# (the works one by one) carry Augustine's City of God.
+FATHERS = affiliate(
+    'Would you like Augustine in print? <em>The City of God</em>, in Henry Bettenson&rsquo;s '
+    'translation, is in paperback from Penguin Classics.',
+    'Buy the City of God on Amazon (Paperback)', '0140448942', 'd6fec6cec769956677626c8b4b4b0569')
+AFFILIATE = [SUMMA, NEWMAN, *NEWMAN_OWN.values(), FATHERS]
 
 
 def edition(title, shelf, no, slug):
     """The card for a work the press prints: its shield, its name, the work's line, a way in."""
     return f'''<aside class="mc-edition" aria-label="The Lérins Press edition">
+<link rel="stylesheet" href="support.css">
 <img src="theme/lerins-shield.webp" alt="" width="88" height="144">
 <div class="mc-edition-txt">
 <p class="mc-edition-press">Lérins Press</p>
@@ -138,17 +152,23 @@ PAGES = {
 }
 
 
-def newman_pages(library=os.path.join(ROOT, 'content', 'library.html')):
-    """Every page the Library's Newman shelf reads online, in its order."""
+def shelf_pages(shelf, library=os.path.join(ROOT, 'content', 'library.html')):
+    """Every page a Library shelf (its <h2 id>) reads online, in its order."""
     with open(library, encoding='utf-8') as f:
         s = f.read()
-    i = s.index('<h2 id="newman">')
+    i = s.index(f'<h2 id="{shelf}">')
     j = s.find('<h2 ', i + 1)
     return re.findall(r'<a href="([^"/]+\.html)">Read online', s[i:j if j > 0 else len(s)])
 
 
+def newman_pages():
+    return shelf_pages('newman')
+
+
 for _page in newman_pages():
     PAGES.setdefault(_page, NEWMAN_OWN.get(_page, NEWMAN))
+for _page in shelf_pages('schaff') + shelf_pages('fathers'):
+    PAGES.setdefault(_page, FATHERS)
 
 
 def inject(html, box):
