@@ -4542,6 +4542,81 @@
     ]
   },
   {
+    "slug": "loyalist-pulpit",
+    "title": "The Loyalist Pulpit",
+    "subtitle": "Volume 2: Wesley, Fletcher, Boucher and the Church of England, 1739–1782",
+    "author": "Wesley and the Loyalist Clergy",
+    "format": "Paperback",
+    "listed": "2026-11-27",
+    "cover": "loyalist-pulpit",
+    "collection": {
+      "slug": "lerins-america",
+      "no": 46,
+      "part": "loyalists"
+    },
+    "lead": [
+      "The pulpit of the King’s side, 1739 to 1782, framed by the quarrel of Wesley and Whitefield: Wesley’s Free Grace and his sermon on Whitefield’s death, Jonathan Boucher’s discourses on the American episcopate and on civil liberty, Wesley’s Calm Address with Johnson’s Taxation No Tyranny and all his American tracts, Fletcher’s Vindication, Duché’s letter to Washington and Inglis’s sermon on honouring the King."
+    ],
+    "description": [
+      "John Wesley and George Whitefield began the Methodist revival together at Oxford, and they parted in 1740 over predestination, when Wesley preached Free Grace and Whitefield answered him from Georgia. Thirty years later, when Whitefield died in America, Wesley preached his funeral sermon in London at his friend’s own request. This volume opens with both sermons. When the colonies took up arms, Wesley took the King’s side. His Calm Address to Our American Colonies of 1775, much of it taken from Dr. Samuel Johnson’s Taxation No Tyranny, sold in tens of thousands. Both are printed here, so the reader can see what Wesley took, with every tract Wesley wrote on liberty, power, slavery and the American war from 1772 to 1782, and John Fletcher’s Vindication of the Calm Address against Caleb Evans. Wesley said in his preface that he had once thought otherwise and had changed his mind on reading Dr. Johnson. His English preachers in America, all but Francis Asbury, went home.",
+      "In America the Church of England’s clergy were the King’s men in the pulpit. Jonathan Boucher, rector in Virginia and Maryland, preached for sending bishops to America in 1771, and in 1775 answered Jacob Duché’s sermon to the Philadelphia militia on its own text, “Stand fast therefore in the liberty wherewith Christ hath made us free,” before he preached his farewell and sailed for England. Two years later Duché himself, the first chaplain of the Congress, wrote from occupied Philadelphia begging Washington to end the war. In New York in 1780 Charles Inglis of Trinity Church preached on the duty of honouring the King, on the day the Church kept for King Charles I. Inglis had stayed in New York through the patriot occupation of 1776 and closed his churches rather than leave out the prayers for the King. Boucher printed his discourses in London in 1797 and dedicated them to George Washington, whom he had known in Virginia as the guardian of his pupil John Parke Custis.",
+      "This is the second volume of The Loyalists in Their Own Words. It faces The Patriot Pulpit, where Whitefield, Mayhew, Witherspoon, Evans and Toplady speak for the American cause, so that each sermon here can be read beside the one it answers. Every sermon, tract and letter is printed whole from its first printing or the edition of record, with the authors’ own prefaces and notes. The Editors of the Mere Catholicity Project add an introduction on the two evangelists and the two pulpits, and a headnote to each piece giving the day, the place and the occasion. Notes explain the people, places, Scriptures, doctrines and old words the reader meets, and a glossary and an index close the volume. Where a piece names its opponent, the note gives the page of the facing volume where that opponent speaks, and Wesley’s tracts are given in the text of his collected Works. The spelling and capitals of the first printings are kept, and the long s is modernized."
+    ],
+    "contents": [
+      {
+        "items": [
+          "Introduction",
+          "A Note on the Text"
+        ]
+      },
+      {
+        "part": "Part One. Free Grace and the Two Evangelists, 1739-1770",
+        "items": [
+          "John Wesley, Free Grace: A Sermon Preached at Bristol, with Charles Wesley’s Hymn on Universal Redemption (1739)",
+          "John Wesley, A Sermon on the Death of the Rev. Mr. George Whitefield (1770)"
+        ]
+      },
+      {
+        "part": "Part Two. The Church of England in America, 1771-1775",
+        "items": [
+          "Jonathan Boucher, On the American Episcopate (1771)",
+          "Jonathan Boucher, On Civil Liberty, Passive Obedience, and Non-Resistance (1775)",
+          "Jonathan Boucher, A Farewell Sermon (1775)"
+        ]
+      },
+      {
+        "part": "Part Three. Mr. Wesley and the Colonies, 1772-1782",
+        "items": [
+          "John Wesley, Thoughts upon Liberty (1772)",
+          "John Wesley, Thoughts Concerning the Origin of Power (1772)",
+          "John Wesley, Thoughts upon Slavery (1774)",
+          "Samuel Johnson, Taxation No Tyranny (1775)",
+          "John Wesley, A Calm Address to Our American Colonies (1775)",
+          "John Wesley, Some Observations on Liberty (1776)",
+          "John Wesley, A Seasonable Address to the Inhabitants of Great Britain (1776)",
+          "John Fletcher, A Vindication of the Rev. Mr. Wesley’s Calm Address, in Letters to Mr. Caleb Evans (1776)",
+          "John Wesley, A Calm Address to the Inhabitants of England (1777)",
+          "John Wesley, A Serious Address to the People of England (1778)",
+          "John Wesley, A Compassionate Address to the Inhabitants of Ireland (1778)",
+          "John Wesley, How Far Is It the Duty of a Christian Minister to Preach Politics? (1782)"
+        ]
+      },
+      {
+        "part": "Part Four. The Loyal Clergy in the War, 1777-1780",
+        "items": [
+          "Jacob Duché, Letter to General Washington (8 October 1777)",
+          "Charles Inglis, The Duty of Honouring the King (1780)"
+        ]
+      },
+      {
+        "items": [
+          "Glossary",
+          "Index"
+        ]
+      }
+    ]
+  },
+  {
     "slug": "the-reformed-catholic-reader-1",
     "title": "The Reformed Catholic Reader, Volume I",
     "subtitle": "Calvin on the Church, Baptism, and the Supper",
