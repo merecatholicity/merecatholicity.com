@@ -31,11 +31,12 @@ class McBoardIndex extends LitElement {
   declare unreadTotal: number;
   declare byCat: any;
   declare adminOn: boolean;
+  declare door: unknown;
   declare _onLive?: (ev: Event) => void;
   declare _refetchT?: ReturnType<typeof setTimeout>;
   static properties = {
     stats: { attribute: false }, unreadTotal: { attribute: false },
-    byCat: { attribute: false }, adminOn: { attribute: false },
+    byCat: { attribute: false }, adminOn: { attribute: false }, door: { attribute: false },
   };
   constructor() {
     super();
@@ -44,10 +45,13 @@ class McBoardIndex extends LitElement {
     this.unreadTotal = 0;
     this.byCat = null;
     this.adminOn = false;
+    this.door = nothing;
   }
   createRenderRoot() { return this; }
   connectedCallback() {
     super.connectedCallback();
+    // the front page's affiliate box: its own small chunk, so app.js carries none of it (P2-5)
+    import('./board_door.ts').then((m) => { this.door = m.summaTpl; }, () => {});
     document.title = 'Community | Mere Catholicity';
     const kit = this.kit;
     this.adminOn = kit.isAdmin();
@@ -180,6 +184,7 @@ class McBoardIndex extends LitElement {
       ${this._catGroup('In-house, by tradition', kit.CATS.filter((c: any) => TRADITION_CATS.indexOf(c[0]) >= 0))}
       ${this.adminOn ? this._catGroup('', kit.CATS.filter((c: any) => c[0] === 'adminsonly')) : nothing}
       <p class="board-audit-link">${this.adminOn ? html`<a class="identity-action" href="community.html?admin=1">Administrative options</a>` : nothing}</p>
+      ${this.door}
     `;
   }
   /* P3-c: the 14-room wall is grouped so a newcomer gets a map — the general
@@ -209,6 +214,7 @@ class McBoardIndex extends LitElement {
   }
 }
 customElements.define('mc-board-index', McBoardIndex);
+
 
 class McBoardCat extends LitElement {
   declare kit: any;
