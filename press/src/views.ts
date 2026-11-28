@@ -73,9 +73,20 @@ export const shelves = (cat: Catalogue): Collection[] => [...cat.press.collectio
 const belongs = (t: Title, c: Collection, cat: Catalogue) =>
   c === cat.press.originals ? !t.collection : t.collection?.slug === c.slug;
 
-/** A shelf's titles: a collection's by number, Originals newest first. */
+/** Where a title's part stands in its collection (a collection without parts is one run). */
+const partRank = (c: Collection, t: Title) => {
+  const i = c.parts.findIndex(p => p.slug === t.collection?.part);
+  return i < 0 ? c.parts.length : i;
+};
+
+/** A shelf's titles: a collection's by part, in the parts' order, then by number (the shelf draws
+ *  its parts in that order, so its batches must come in it too: Lérins America's numbers run in
+ *  the order made, not in history's, and a batch by number alone drew the Colonies, Nos. 39-41,
+ *  above a reader who had already scrolled past where they stand); Originals newest first. */
 const inCollection = (c: Collection, cat: Catalogue) => cat.titles.filter(t => belongs(t, c, cat))
-  .sort((a, b) => a.collection && b.collection ? a.collection.no - b.collection.no : b.listed.localeCompare(a.listed));
+  .sort((a, b) => a.collection && b.collection
+    ? partRank(c, a) - partRank(c, b) || a.collection.no - b.collection.no
+    : b.listed.localeCompare(a.listed));
 
 /** The cards a page's shelf draws, in order: on the home page every shelf in turn; on a
  *  shelf's own page, that shelf alone. The shelf draws them a batch at a time (`shown`), so
