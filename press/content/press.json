@@ -37,6 +37,186 @@
     ],
     "parts": []
   },
+  "bibles": {
+    "slug": "bibles",
+    "name": "Bibles",
+    "short": "Bibles",
+    "tagline": "Editions of Holy Scripture the press recommends",
+    "tag": "lerinspress-20",
+    "about": [
+      "Lérins Press does not print the Bible. These are editions from other publishers that we recommend for reading and study beside our own books."
+    ],
+    "thanks": [
+      "Thank you for buying through these links. The Amazon links here are affiliate links: when you buy through one, Amazon pays a small commission, **at no extra cost to you, and it helps support the Mere Catholicity Project.** We are grateful for every one.",
+      "As an Amazon Associate, Lérins Press earns from qualifying purchases."
+    ],
+    "items": [
+      {
+        "slug": "noab-rsv-8914a",
+        "title": "The New Oxford Annotated Bible with the Apocrypha",
+        "subtitle": "Revised Standard Version, Expanded Edition",
+        "publisher": "Oxford University Press",
+        "cover": "bible-noab-rsv-8914a",
+        "buy": [
+          {
+            "format": "Leatherbound",
+            "url": "https://www.amazon.com/dp/019528335X?linkCode=ll2&tag=lerinspress-20&linkId=de89156471a2bc3fed6c9f01dda5b82d&language=en_US&ref_=as_li_ss_tl"
+          },
+          {
+            "format": "Hardcover",
+            "url": "https://www.amazon.com/dp/0195283481?linkCode=ll2&tag=lerinspress-20&linkId=b7f2b895eb014cdaa49aee77449fe5c1&language=en_US&ref_=as_li_ss_tl"
+          }
+        ],
+        "lead": [
+          "For decades the most widely used study Bible in American schools, colleges, seminaries and universities, made for readers of every tradition."
+        ],
+        "description": [
+          "The New Oxford Annotated Bible is Oxford's study edition of the Revised Standard Version, the translation it was first made for. Every book has its own introduction and running notes on the page, and the volume adds supplementary articles and maps to guide the reader through the text.",
+          "The notes are edited by Bruce Metzger, a Presbyterian minister and one of the finest New Testament Greek scholars of his age, and the expanded Apocrypha carries the books the ancient communions count as Scripture, so Roman, Orthodox, and Protestant readers can open the same volume. The RSV itself is the last of the great common translations before gender-neutral revision, and it keeps thee and thou in address to God. A solid conservative and ecumenical pick.",
+          "It is offered in two bindings: genuine black leather (8914A), which comes in a protective two-piece box, and hardcover."
+        ]
+      },
+      {
+        "slug": "kjv-cameo-kj455xra",
+        "title": "The Cameo Reference Bible with the Apocrypha",
+        "subtitle": "King James Version, Red-Letter Edition",
+        "publisher": "Cambridge University Press",
+        "binding": "Black calfskin leather (KJ455:XRA)",
+        "cover": "bible-kjv-cameo-kj455xra",
+        "buy": [
+          {
+            "format": "Leatherbound",
+            "url": "https://www.amazon.com/dp/1107608074?linkCode=ll2&tag=lerinspress-20&linkId=28c08c9b592ffa1dee09246e0ed1500d&language=en_US&ref_=as_li_ss_tl"
+          }
+        ],
+        "lead": [
+          "One of the classic Cambridge editions of the King James Bible, first set in the 1920s and one of the very few in print today with the Apocrypha."
+        ],
+        "description": [
+          "Cambridge set the Cameo in a historic typeface, Petit Medieval Clarendon, large enough to read with ease and small enough for a compact Bible. Long out of print, it was reissued in answer to readers who kept asking for it.",
+          "The text carries full cross-references, pronunciation marks for difficult names and words, and the words of Christ in red, with a concordance and fifteen colour maps at the back. It prints the Apocrypha, as the King James Bible of 1611 did. This copy is on India paper with art-gilt edges, bound in black calfskin."
+        ]
+      },
+      {
+        "slug": "geneva-1560-facsimile",
+        "title": "The Geneva Bible",
+        "subtitle": "Geneva Version, 1560 First Edition Facsimile",
+        "publisher": "The Bible Museum",
+        "binding": "Burgundy",
+        "cover": "bible-geneva-1560-facsimile",
+        "buy": [
+          {
+            "format": "Hardcover",
+            "url": "https://www.amazon.com/dp/B0B2ZQX32N?linkCode=ll2&tag=lerinspress-20&linkId=6b47d032f5e7126ae036d1d64bf8fb5d&language=en_US&ref_=as_li_ss_tl"
+          }
+        ],
+        "lead": [
+          "The Bible of Shakespeare, the Puritans and the Pilgrims, the most widely read English Bible of its century, reproduced page for page from the first edition."
+        ],
+        "description": [
+          "English Protestants who fled to Geneva under Mary I made this translation there and printed it in 1560. It was the first complete English Bible divided into numbered verses, and for some eighty years it was the Bible most English households read. It came to America with the Pilgrims and the Puritans.",
+          "Its marginal notes, some 300,000 words in all, carried the teaching of the Reformed churches and did much to make it loved. The bishops never adopted it, and James I called some of its notes seditious, which led in time to the King James Version. The first edition's woodcuts and maps are here, with the Old Testament, the Apocrypha and the New Testament complete.",
+          "This facsimile is digitally remastered and slightly enlarged for easier reading, with nothing of the content altered."
+        ]
+      },
+      {
+        "slug": "douay-rheims-large",
+        "title": "The Douay-Rheims Bible",
+        "subtitle": "Challoner Revision, Large Size Edition",
+        "publisher": "Baronius Press",
+        "binding": "Flexible black leather",
+        "cover": "bible-douay-rheims-large",
+        "buy": [
+          {
+            "format": "Leatherbound",
+            "url": "https://www.amazon.com/dp/1905574681?linkCode=ll2&tag=lerinspress-20&linkId=526d182243651f8fd743f7ea7f0948cc&language=en_US&ref_=as_li_ss_tl"
+          }
+        ],
+        "lead": [
+          "The traditional Catholic Bible in English, newly typeset from the edition of 1899 and bound in leather."
+        ],
+        "description": [
+          "English Catholic exiles at Douai and Rheims translated the Bible from the Latin Vulgate, the New Testament in 1582 and the Old in 1609 and 1610. Bishop Richard Challoner revised it in the 1750s, and in his revision it was the Bible of English-speaking Catholics for some two hundred years.",
+          "Baronius Press has set the 1899 edition again in clear modern type, so it reads far more easily than the old facsimiles. It adds eleven newly drawn colour maps, thirty-two engravings of scenes from sacred history and a family register. This copy is bound in flexible black leather with stitched edges, gilt page edges and two ribbons."
+        ]
+      },
+      {
+        "slug": "ignatius-catholic-study",
+        "title": "The Ignatius Catholic Study Bible",
+        "subtitle": "Revised Standard Version, Second Catholic Edition",
+        "publisher": "Ignatius Press",
+        "cover": "bible-ignatius-study",
+        "buy": [
+          {
+            "format": "Bonded leather",
+            "url": "https://www.amazon.com/dp/1586176145?linkCode=ll2&tag=lerinspress-20&linkId=58d57c36dbbfba3a034a6a42de08582c&language=en_US&ref_=as_li_ss_tl"
+          },
+          {
+            "format": "Hardcover",
+            "url": "https://www.amazon.com/dp/1621648761?linkCode=ll2&tag=lerinspress-20&linkId=f4a3aa81918c96b4e12b5cef450f499d&language=en_US&ref_=as_li_ss_tl"
+          }
+        ],
+        "lead": [
+          "The whole of Scripture in one volume with a full Catholic apparatus, edited by Scott Hahn and Curtis Mitch."
+        ],
+        "description": [
+          "Ignatius Press gathered its long-running Catholic study Bible into a single volume, in the Revised Standard Version, Second Catholic Edition. Every book of the Bible has its own introduction and outline, and more than 17,000 notes run beneath the text, chapter by chapter.",
+          "The notes explain the history, culture and language behind the text, and draw on the Fathers, the Doctors and the councils for its teaching. They point to the Catechism of the Catholic Church at some 1,700 places. Between the books stand topical essays, word studies of the key terms, charts and some fifty maps.",
+          "Scott Hahn is the general editor and Curtis Mitch co-editor, with a team of Catholic Scripture scholars from the Augustine Institute, Franciscan University, Sacred Heart Major Seminary and other schools. The text is set in 10-point type, the notes in 8."
+        ]
+      },
+      {
+        "slug": "orthodox-study",
+        "title": "The Orthodox Study Bible",
+        "subtitle": "Septuagint and New King James Version",
+        "publisher": "Thomas Nelson",
+        "cover": "bible-orthodox-study",
+        "buy": [
+          {
+            "format": "Leatherbound",
+            "url": "https://www.amazon.com/dp/1400357586?linkCode=ll2&tag=lerinspress-20&linkId=fef380abd162bacb7fa0ace7fbbc0b17&language=en_US&ref_=as_li_ss_tl"
+          },
+          {
+            "format": "Hardcover",
+            "url": "https://www.amazon.com/dp/0718003594?linkCode=ll2&tag=lerinspress-20&linkId=b8df6e7c59ba6394d99dfcdddc22abe6&language=en_US&ref_=as_li_ss_tl"
+          }
+        ],
+        "lead": [
+          "The Bible of the Orthodox Church in English, its Old Testament from the Septuagint, with notes drawn from the Fathers of the first ten centuries."
+        ],
+        "description": [
+          "A team of Orthodox scholars and pastors from across the jurisdictions prepared this study Bible, first published complete in 2008. Its Old Testament is a new translation from the Septuagint, the Greek Old Testament the early Church read, with the deuterocanonical books. Its New Testament is the New King James Version.",
+          "The commentary is drawn from the Christian writers and teachers of the first ten centuries after Christ. Every book has an introduction and an outline, and the notes tie the text to the Church's seasons of feasting and fasting. The volume adds a subject index to the notes, a lectionary for reading through the Church year, morning and evening prayers, articles on the books, the saints of the Old Testament and Christology, and full-colour icons.",
+          "It is offered in two bindings: black genuine leather, and hardcover."
+        ]
+      },
+      {
+        "slug": "esv-study",
+        "title": "The ESV Study Bible",
+        "subtitle": "English Standard Version",
+        "publisher": "Crossway",
+        "cover": "bible-esv-study",
+        "buy": [
+          {
+            "format": "Leatherbound",
+            "url": "https://www.amazon.com/dp/1433502445?linkCode=ll2&tag=lerinspress-20&linkId=2a1caed1acbaf48afb8e75e7f1f3b544&language=en_US&ref_=as_li_ss_tl"
+          },
+          {
+            "format": "Hardcover",
+            "url": "https://www.amazon.com/dp/1433502410?linkCode=ll2&tag=lerinspress-20&linkId=fd12eba4077e3b27ad69b779c637950f&language=en_US&ref_=as_li_ss_tl"
+          }
+        ],
+        "lead": [
+          "The study Bible of the English Standard Version, made by some ninety-five scholars and teachers from nine countries and nearly twenty denominations."
+        ],
+        "description": [
+          "Crossway first published the ESV Study Bible in 2008, with Wayne Grudem as general editor and J. I. Packer as theological editor. Its contributors came from some fifty seminaries, colleges and universities, and it was named the Christian Book of the Year.",
+          "Some 20,000 study notes run beneath the text, on every page. The volume adds introductions to every book, more than 200 charts and timelines, some 240 full-colour maps and illustrations, more than fifty articles on doctrine and on reading the Bible, and profiles of the people of Scripture. It is Smyth-sewn and set in 9-point type.",
+          "It is offered in two bindings: black genuine leather with gilt edges, and hardcover."
+        ]
+      }
+    ]
+  },
   "collections": [
     {
       "slug": "lerins-newman",

@@ -49,7 +49,8 @@ cover:
 
 placeholders: node_modules/.package-lock.json
 	node scripts/placeholders.ts
-	@for p in content/covers/soon-*.png; do \
+	@for p in content/covers/soon-*.png content/covers/bible-*.png; do \
+	  [ -e "$$p" ] || continue; \
 	  $(MAKE) -s cover SRC="$$p" NAME="$$(basename "$$p" .png)" && rm "$$p"; \
 	done
 

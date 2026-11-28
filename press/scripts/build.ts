@@ -51,6 +51,16 @@ for (const t of titles) {
   t.coverSize = [1000, Math.round(h * 1000 / w)];
 }
 
+// The Bibles page's covers, the same way (no wash: they are on no carousel).
+for (const r of press.bibles.items) {
+  for (const f of [`${r.cover}.webp`, `${r.cover}-480.webp`, `${r.cover}-360.webp`, `${r.cover}.jpg`]) {
+    try { statSync(join(ROOT, "content/covers", f)); }
+    catch { throw new Error(`bibles/${r.slug}: missing content/covers/${f} (make cover)`); }
+  }
+  const [w, h] = jpegSize(readFileSync(join(ROOT, "content/covers", `${r.cover}.jpg`)));
+  r.coverSize = [1000, Math.round(h * 1000 / w)];
+}
+
 rmSync(DIST, { recursive: true, force: true });
 mkdirSync(join(DIST, "assets"), { recursive: true });
 
@@ -73,17 +83,24 @@ writeFileSync(join(DIST, jsName), jsText);
 // names it by a placeholder the build fills. A name with a character the cut lacks is refused.
 const FONTS = join(ROOT, "node_modules/@fontsource/cinzel");
 const fontChars = new Set(read("content/fonts/cinzel-chars.txt"));
-for (const name of [press.name, press.originals.name, ...press.collections.map(c => `${c.name} Collection`)])
+for (const name of [press.name, press.originals.name, press.bibles.name, ...press.collections.map(c => `${c.name} Collection`)])
   for (const ch of name)
     if (!fontChars.has(ch)) throw new Error(`"${name}": "${ch}" is not in content/fonts/cinzel-chars.txt (run scripts/subset-cinzel.sh)`);
 const font = readFileSync(join(ROOT, "content/fonts/cinzel-500-subset.woff2"));
 const fontName = `assets/cinzel-500-${hash(font)}.woff2`;
 writeFileSync(join(DIST, fontName), font);
 cpSync(join(FONTS, "LICENSE"), join(DIST, "assets/cinzel-OFL.txt"));
+// The Bibles' thanks heading's script (Pinyon Script, SIL OFL): its Latin cut alone, named by
+// its hash, and fetched only by a page that sets it.
+const script = readFileSync(join(ROOT, "node_modules/@fontsource/pinyon-script/files/pinyon-script-latin-400-normal.woff2"));
+const scriptName = `assets/pinyon-script-400-${hash(script)}.woff2`;
+writeFileSync(join(DIST, scriptName), script);
+cpSync(join(ROOT, "node_modules/@fontsource/pinyon-script/LICENSE"), join(DIST, "assets/pinyon-script-OFL.txt"));
 
 // The stylesheet is small, so it rides in each page's head, minified: a separate file would
 // hold the first paint back for a round trip (Lighthouse's render-blocking request).
-const css = transformSync(read("src/press.css").replaceAll("/assets/fonts/cinzel-latin-500-normal.woff2", `/${fontName}`),
+const css = transformSync(read("src/press.css").replaceAll("/assets/fonts/cinzel-latin-500-normal.woff2", `/${fontName}`)
+  .replaceAll("/assets/fonts/pinyon-script-latin-400-normal.woff2", `/${scriptName}`),
   { loader: "css", minify: true }).code.trim();
 
 cpSync(join(ROOT, "content/covers"), join(DIST, "covers"), { recursive: true });
@@ -147,7 +164,8 @@ ${headTags(meta, cat).map(([a, k, v]) => `<meta ${a}="${k}" content="${esc(v)}">
 }
 
 const routes: Route[] = [{ kind: "home" }, { kind: "about" }, { kind: "contact" }, { kind: "privacy" }, { kind: "terms" },
-  ...shelves(cat).map(collection => ({ kind: "collection" as const, collection })),
+  ...shelves(cat).map(collection => ({ kind: "collection" as const, collection })), { kind: "bibles" },
+  ...press.bibles.items.map(bible => ({ kind: "bible" as const, bible })),
   ...titles.map(title => ({ kind: "title" as const, title }))];
 for (const route of routes) {
   const dir = join(DIST, pathOf(route));

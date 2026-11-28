@@ -5,6 +5,12 @@
    used for the press's name and the shelves' and nothing else. The build rewrites this URL to the
    face cut to those names' characters, under its hash (scripts/build.ts, content/fonts). */
 @font-face {
+  font-family: "Pinyon Script";
+  font-weight: 400;
+  font-display: swap;
+  src: url("/assets/fonts/pinyon-script-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
   font-family: "Cinzel";
   font-weight: 500;
   font-display: swap;
@@ -553,6 +559,29 @@ main > .filter:first-child { margin-top: 18px; }
 .book-toc h3 { font-weight: normal; font-style: italic; font-size: 1rem; color: var(--ink-soft); margin: 20px 0 6px; }
 .book-toc ul { list-style: none; margin: 0 0 12px; padding: 0; }
 .book-toc li { margin: 0 0 6px; padding-left: 1.2em; text-indent: -1.2em; overflow-wrap: anywhere; }
+
+/* Bibles: other publishers' editions the press recommends, a shelf like any other. The thanks
+   is a card of its own, warm: a gold heart, the thanks in a script, its heart in bold, and Amazon's
+   line small beneath. */
+.rec-thanks { max-width: 620px; margin: 28px auto 8px; padding: 26px 28px 22px; text-align: center;
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent); border-radius: 12px;
+  background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--gold) 12%, var(--surface)), var(--surface));
+  box-shadow: var(--shadow-2); }
+.rec-heart { margin: 0; font-size: 1.7rem; line-height: 1; color: #e0566b; }
+.rec-thanks-head { margin: 4px 0 10px; font: 2.3rem/1.2 "Pinyon Script", var(--font-serif); color: var(--gold); }
+.rec-thanks p:not(.rec-heart):not(.rec-thanks-head) { margin: 0 0 12px; color: var(--ink-soft); }
+.rec-thanks strong { font-weight: 700; color: var(--ink); }
+.rec-thanks p:not(.rec-heart):not(.rec-thanks-head):last-child { margin: 0; font: 0.8rem var(--font-sans); font-style: normal; color: var(--faint); }
+.rec-thanks-small { margin: 28px 0 0; padding: 20px 22px 18px; }
+.rec-thanks-small .rec-thanks-head { font-size: 1.9rem; }
+.rec-thanks-small p:not(.rec-heart):not(.rec-thanks-head):not(:last-child) { font-size: 0.95rem; }
+/* A Bible's photograph is cut out of its white ground (the WebP keeps the cut, the JPEG fallback
+   is on white for link previews): no cream box behind it, and a shadow that follows the book. */
+.rec-actions { align-items: center; }
+.rec-buy { flex-direction: column; gap: 6px; }
+.rec-buy .btn { align-self: stretch; }
+.btn-small { padding: 7px 12px; font-size: 0.82rem; }
+.rec-aff { font: 0.78rem var(--font-sans); letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
 
 /* Plain pages. */
 .prose { max-width: 680px; margin: 48px auto 0; }
