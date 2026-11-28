@@ -66,8 +66,9 @@ class Ledger(unittest.TestCase):
 
     def test_a_work_s_own_entry_beats_its_shelf(self):
         pages = m.resolve(LEDGER)
-        self.assertIn('dp/0140433740?', pages['apologia.html'])
-        self.assertIn('dp/026800921X?', pages['idea.html'])
+        self.assertIn('dp/163941035X?', pages['guettee.html'])
+        self.assertIn('titles/newman-idea/', pages['idea.html'])
+        self.assertIn('In print: <em>An Essay on the Development', pages['verses.html'])
         self.assertIn('class="mc-edition"', pages['catena-john.html'])
         self.assertIn('This work in print: <em>Mere Catholicity</em>', pages['book.html'])
         self.assertIn('In print: <em>Mere Catholicity</em>', pages['charting-communions.html'])

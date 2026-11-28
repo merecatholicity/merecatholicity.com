@@ -7,41 +7,11 @@
    "words": "Would you like the Summa in print? The English Dominican translation read here comes as a five-volume hardcover set.",
    "label": "Buy on Amazon (Hardcover, 5 volumes)"
   },
-  "newman-essay-notre-dame": {
-   "asin": "026800921X",
-   "link_id": "20e6b7a13c0b8b1184c44bada0cf3329",
-   "words": "Would you like Newman in print? His <em>Essay on the Development of Christian Doctrine</em>, the 1878 edition with a foreword by Ian Ker, is still the classic text on how doctrine grows, in paperback from the University of Notre Dame Press.",
-   "label": "Buy the Essay on Amazon (Paperback)"
-  },
-  "newman-apologia-penguin": {
-   "asin": "0140433740",
-   "link_id": "c0a438ed64b54cb484072f14119d589c",
-   "words": "Would you like the <em>Apologia</em> in print? The Penguin Classics edition, edited with an introduction by Ian Ker, is in paperback.",
-   "label": "Buy the Apologia on Amazon (Paperback)"
-  },
-  "newman-grammar-notre-dame": {
-   "asin": "0268010005",
-   "link_id": "6aeb541c97e4602a56c62e0dbf860734",
-   "words": "Would you like the <em>Grammar of Assent</em> in print? The University of Notre Dame Press keeps it in paperback, with an introduction by Nicholas Lash.",
-   "label": "Buy the Grammar of Assent on Amazon (Paperback)"
-  },
   "city-of-god-bettenson": {
    "asin": "0140448942",
    "link_id": "d6fec6cec769956677626c8b4b4b0569",
    "words": "Would you like Augustine in print? <em>The City of God</em>, in Henry Bettenson&rsquo;s translation, is in paperback from Penguin Classics.",
    "label": "Buy the City of God on Amazon (Paperback)"
-  },
-  "luther-theses-penguin": {
-   "asin": "0143107585",
-   "link_id": "9a0b71aa31df4fe35e9d27d86e73b860",
-   "words": "Would you like Luther in print? <em>The Ninety-Five Theses and Other Writings</em>, translated and edited by William R. Russell, is in paperback from Penguin Classics.",
-   "label": "Buy the Ninety-Five Theses on Amazon (Paperback)"
-  },
-  "luther-bondage-baker": {
-   "asin": "0801048931",
-   "link_id": "49d4a9499617f65ab56d6599516a2f26",
-   "words": "Would you like <em>The Bondage of the Will</em> in print? J. I. Packer and O. R. Johnston&rsquo;s translation is in paperback from Baker Academic.",
-   "label": "Buy the Bondage of the Will on Amazon (Paperback)"
   },
   "luther-galatians-crossway": {
    "asin": "0891079947",
@@ -61,12 +31,6 @@
    "words": "Would you like Jewel&rsquo;s <em>Apology</em> in print? The Davenant Press edition, edited by Robin Harris and Andre Gazal, is in paperback.",
    "label": "Buy the Apology on Amazon (Paperback)"
   },
-  "chesterton-everlasting-ignatius": {
-   "asin": "0898704448",
-   "link_id": "6b0ef77eab7fcc896f0ff9819c021235",
-   "words": "Would you like <em>The Everlasting Man</em> in print? Ignatius Press keeps it in paperback.",
-   "label": "Buy the Everlasting Man on Amazon (Paperback)"
-  },
   "gibbons-faith-tan": {
    "asin": "0895551586",
    "link_id": "b5b852530fb33db4370fc12d849db80b",
@@ -85,36 +49,6 @@
    "words": "Would you like Guettée&rsquo;s <em>The Papacy</em> in print? Uncut Mountain Press keeps it in paperback.",
    "label": "Buy the Papacy on Amazon (Paperback)"
   },
-  "vincent-commonitory-osjusti": {
-   "asin": "1965303188",
-   "link_id": "dc6408f6f07cee4362048de45c755b4e",
-   "words": "Would you like the <em>Commonitory</em> in print? Os Justi Press keeps Vincent of Lérins&rsquo;s rule of faith in paperback.",
-   "label": "Buy the Commonitory on Amazon (Paperback)"
-  },
-  "ignatius-letters-svs": {
-   "asin": "0881414646",
-   "link_id": "053fe55855498451b4bebbd0e826d487",
-   "words": "Would you like Ignatius in print? <em>The Letters</em>, in St Vladimir&rsquo;s Seminary Press&rsquo;s Popular Patristics series, is in paperback.",
-   "label": "Buy the Letters on Amazon (Paperback)"
-  },
-  "apostolic-fathers-holmes": {
-   "asin": "0801031087",
-   "link_id": "5fdd79b8d30aeb75aa4dfbe4f17820fb",
-   "words": "Would you like Clement in print? <em>The Apostolic Fathers in English</em>, edited by Michael W. Holmes, is in paperback from Baker Academic.",
-   "label": "Buy the Apostolic Fathers on Amazon (Paperback)"
-  },
-  "justin-apologies-cua": {
-   "asin": "0813215528",
-   "link_id": "2f9d9645f632377ddb0fd6dfa525dd79",
-   "words": "Would you like Justin in print? His <em>First Apology</em>, with the Second and the Dialogue with Trypho, is in the Catholic University of America Press&rsquo;s Fathers of the Church series.",
-   "label": "Buy Justin Martyr on Amazon (Paperback)"
-  },
-  "early-christian-writings-penguin": {
-   "asin": "0140444750",
-   "link_id": "801b4eca0b01620d0e14f4c5244c7ce0",
-   "words": "Would you like the <em>Didache</em> in print? Penguin Classics prints it in <em>Early Christian Writings: The Apostolic Fathers</em>, in paperback.",
-   "label": "Buy Early Christian Writings on Amazon (Paperback)"
-  },
   "irenaeus-book3-acw": {
    "asin": "0809105896",
    "link_id": "33a396f799ed7888ca538a37b0d5356c",
@@ -132,12 +66,6 @@
    "link_id": "fc0359d6e324be193af0b1ad2eb4d60d",
    "words": "Would you like Cyprian in print? <em>On the Church: Select Treatises</em>, with <em>On the Unity of the Church</em>, is in St Vladimir&rsquo;s Seminary Press&rsquo;s Popular Patristics series.",
    "label": "Buy On the Church on Amazon (Paperback)"
-  },
-  "cyril-lectures-lf": {
-   "asin": "1666731722",
-   "link_id": "ddfa7b73ebac3d7d681c2c42bea2bcf3",
-   "words": "Would you like Cyril in print? <em>The Catechetical Lectures</em>, in the Library of the Fathers translation, is in paperback.",
-   "label": "Buy the Catechetical Lectures on Amazon (Paperback)"
   },
   "nyssa-catechetical-svs": {
    "asin": "0881416487",
@@ -172,7 +100,7 @@
   "fathers": "city-of-god-bettenson",
   "schaff": "city-of-god-bettenson",
   "aquinas": "summa-dominican-5vol",
-  "newman": "newman-essay-notre-dame",
+  "newman": "lerins:newman-development",
   "reformers": "calvin-institutes-hendrickson",
   "apologetics": "lerins:heretics-and-orthodoxy",
   "papers": "lerins:mere-catholicity",
@@ -200,14 +128,26 @@
   "catena-john.html": {
    "lerins": "catena-aurea-on-st-john"
   },
-  "apologia.html": "newman-apologia-penguin",
-  "grammar.html": "newman-grammar-notre-dame",
-  "luther-primary.html": "luther-theses-penguin",
-  "bondage.html": "luther-bondage-baker",
+  "apologia.html": {
+   "lerins": "newman-apologia"
+  },
+  "grammar.html": {
+   "lerins": "newman-grammar"
+  },
+  "luther-primary.html": {
+   "lerins": "the-ninety-five-theses-the-bondage-of-the-will"
+  },
+  "bondage.html": {
+   "lerins": "the-ninety-five-theses-the-bondage-of-the-will"
+  },
   "luther-galatians.html": "luther-galatians-crossway",
-  "institutes.html": "calvin-institutes-hendrickson",
+  "institutes.html": {
+   "lerins": "calvin-institutes"
+  },
   "jewel.html": "jewel-apology-davenant",
-  "everlasting.html": "chesterton-everlasting-ignatius",
+  "everlasting.html": {
+   "lerins": "the-everlasting-man-and-the-thing"
+  },
   "gibbons.html": "gibbons-faith-tan",
   "hooker.html": {
    "miss": "the only whole edition from a name-brand house is OUP's critical edition at $659.94; Cambridge's McGrade paperback is selections only",
@@ -232,15 +172,27 @@
    "lerins": "newman-arians"
   },
   "guettee.html": "guettee-papacy-uncut",
-  "commonitory.html": "vincent-commonitory-osjusti",
-  "ignatius.html": "ignatius-letters-svs",
-  "clement.html": "apostolic-fathers-holmes",
-  "justin.html": "justin-apologies-cua",
-  "didache.html": "early-christian-writings-penguin",
+  "commonitory.html": {
+   "lerins": "the-commonitory"
+  },
+  "ignatius.html": {
+   "lerins": "the-apostolic-fathers"
+  },
+  "clement.html": {
+   "lerins": "the-apostolic-fathers"
+  },
+  "justin.html": {
+   "lerins": "the-first-and-second-apologies-of-st-justin-martyr"
+  },
+  "didache.html": {
+   "lerins": "the-apostolic-fathers"
+  },
   "irenaeus3.html": "irenaeus-book3-acw",
   "baptism.html": "tertullian-baptism-evans",
   "unity.html": "cyprian-church-svs",
-  "cyril.html": "cyril-lectures-lf",
+  "cyril.html": {
+   "lerins": "the-catechetical-lectures-of-st-cyril-of-jerusalem"
+  },
   "gregory.html": "nyssa-catechetical-svs",
   "soulres.html": "nyssa-soul-svs",
   "councils.html": "councils-davis",
@@ -279,6 +231,150 @@
   "bishop-of-rome.html": {
    "miss": "the site's own compilation",
    "date": "2026-11-28"
+  },
+  "tracts-times.html": {
+   "lerins": "newman-tracts-times"
+  },
+  "parochial1.html": {
+   "lerins": "newman-parochial1"
+  },
+  "parochial2.html": {
+   "lerins": "newman-parochial2"
+  },
+  "parochial3.html": {
+   "lerins": "newman-parochial3"
+  },
+  "parochial4.html": {
+   "lerins": "newman-parochial4"
+  },
+  "parochial5.html": {
+   "lerins": "newman-parochial5"
+  },
+  "parochial6.html": {
+   "lerins": "newman-parochial6"
+  },
+  "parochial7.html": {
+   "lerins": "newman-parochial7"
+  },
+  "parochial8.html": {
+   "lerins": "newman-parochial8"
+  },
+  "british-critic.html": {
+   "lerins": "newman-british-critic"
+  },
+  "viamedia1.html": {
+   "lerins": "newman-viamedia1"
+  },
+  "justification.html": {
+   "lerins": "newman-justification"
+  },
+  "subjects.html": {
+   "lerins": "newman-subjects"
+  },
+  "development.html": {
+   "lerins": "newman-development"
+  },
+  "viamedia2.html": {
+   "lerins": "newman-viamedia2"
+  },
+  "loss-and-gain.html": {
+   "lerins": "newman-loss-and-gain"
+  },
+  "discourses.html": {
+   "lerins": "newman-discourses"
+  },
+  "sermon-notes.html": {
+   "lerins": "newman-sermon-notes"
+  },
+  "anglicans1.html": {
+   "lerins": "newman-anglicans1"
+  },
+  "present-position.html": {
+   "lerins": "newman-present-position"
+  },
+  "idea.html": {
+   "lerins": "newman-idea"
+  },
+  "callista.html": {
+   "lerins": "newman-callista"
+  },
+  "occasions.html": {
+   "lerins": "newman-occasions"
+  },
+  "consulting.html": {
+   "lerins": "newman-consulting"
+  },
+  "pusey.html": {
+   "lerins": "newman-pusey"
+  },
+  "gerontius.html": {
+   "lerins": "newman-gerontius"
+  },
+  "norfolk.html": {
+   "lerins": "newman-norfolk"
+  },
+  "athanasius1.html": {
+   "lerins": "newman-athanasius1"
+  },
+  "athanasius2.html": {
+   "lerins": "newman-athanasius2"
+  },
+  "meditations.html": {
+   "lerins": "newman-meditations"
+  },
+  "faith-prejudice.html": {
+   "lerins": "newman-faith-prejudice"
+  },
+  "athanasius-tracts.html": {
+   "lerins": "newman-athanasius-tracts"
+  },
+  "essays1.html": {
+   "lerins": "newman-essays1"
+  },
+  "essays2.html": {
+   "lerins": "newman-essays2"
+  },
+  "tracts-theological.html": {
+   "lerins": "newman-tracts-theological"
+  },
+  "arguments.html": {
+   "lerins": "newman-arguments"
+  },
+  "historical1.html": {
+   "lerins": "newman-historical1"
+  },
+  "historical2.html": {
+   "lerins": "newman-historical2"
+  },
+  "historical3.html": {
+   "lerins": "newman-historical3"
+  },
+  "sayings.html": {
+   "lerins": "newman-sayings"
+  },
+  "addresses.html": {
+   "lerins": "newman-addresses"
+  },
+  "incarnation.html": {
+   "lerins": "on-the-incarnation-of-the-word"
+  },
+  "cityofgod.html": {
+   "lerins": "the-city-of-god"
+  },
+  "cassian-prayer.html": {
+   "lerins": "the-conferences-of-john-cassian"
+  },
+  "benedict-rule.html": {
+   "lerins": "the-holy-rule-of-st-benedict"
+  },
+  "damascus.html": {
+   "lerins": "an-exact-exposition-of-the-orthodox-faith"
+  },
+  "confessions.html": {
+   "lerins": "the-confessions-of-st-augustine"
+  },
+  "law.html": {
+   "lerins": "a-serious-call-to-a-devout-and-holy-life"
   }
  }
 }
