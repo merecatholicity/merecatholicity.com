@@ -2,7 +2,7 @@
 // server (@lit-labs/ssr), and the browser renders the same templates when it navigates,
 // so the first paint and every later one come from one source.
 import { html, nothing, type TemplateResult } from "lit";
-import { type Catalogue, type Collection, type Recommended, type Route, type Title } from "./types.ts";
+import { type Catalogue, type Collection, type Recommendations, type Recommended, type Route, type Title } from "./types.ts";
 
 /** The shelf draws this many cards at first, and this many more each time the reader nears
  *  its end (app.ts watches for that), so a long catalogue costs a phone only what it shows. */
@@ -110,8 +110,8 @@ export function pathOf(route: Route): string {
     case "privacy": return "/privacy/";
     case "terms": return "/terms/";
     case "collection": return `/collections/${route.collection.slug.replace(/^lerins-/, "")}/`;
-    case "bibles": return "/bibles/";
-    case "bible": return `/bibles/${route.bible.slug}/`;
+    case "recs": return `/${route.shelf.slug}/`;
+    case "rec": return `/${route.shelf.slug}/${route.item.slug}/`;
     case "title": return `/titles/${route.title.slug}/`;
     case "missing": return "/404.html";
   }
@@ -124,10 +124,11 @@ export function routeOf(path: string, cat: Catalogue): Route {
   if (p === "/contact/") return { kind: "contact" };
   if (p === "/privacy/") return { kind: "privacy" };
   if (p === "/terms/") return { kind: "terms" };
-  if (p === "/bibles/") return { kind: "bibles" };
-  const bm = /^\/bibles\/([a-z0-9-]+)\/$/.exec(p);
-  const bible = bm ? cat.press.bibles.items.find(r => r.slug === bm[1]) : undefined;
-  if (bible) return { kind: "bible", bible };
+  const rm = /^\/([a-z0-9-]+)\/(?:([a-z0-9-]+)\/)?$/.exec(p);
+  const shelf = rm ? cat.press.recommended.find(r => r.slug === rm[1]) : undefined;
+  if (shelf && !rm![2]) return { kind: "recs", shelf };
+  const item = shelf?.items.find(r => r.slug === rm![2]);
+  if (shelf && item) return { kind: "rec", shelf, item };
   const c = /^\/collections\/([a-z0-9-]+)\/$/.exec(p);
   const collection = c ? shelves(cat).find(x => x.slug.replace(/^lerins-/, "") === c[1]) : undefined;
   if (collection) return { kind: "collection", collection };
@@ -178,16 +179,16 @@ export function metaOf(route: Route, cat: Catalogue): Meta {
       return { title: `${shelfName(c, cat)} · ${press.name}`, description: c.about[0] ?? c.tagline,
         path: pathOf(route), image: OG_IMAGE };
     }
-    case "bibles": {
-      const b = press.bibles;
+    case "recs": {
+      const b = route.shelf;
       return { title: `${b.name} · ${press.name}`, description: `${b.tagline}. ${b.about[0] ?? ""}`.trim(),
-        path: "/bibles/", image: OG_IMAGE };
+        path: pathOf(route), image: OG_IMAGE };
     }
-    case "bible": {
-      const r = route.bible;
-      const [w, h] = r.coverSize ?? [1000, 1418];
-      return { title: `${r.title} · ${press.bibles.name} · ${press.name}`,
-        description: r.lead.join(" ") || press.bibles.tagline, path: pathOf(route),
+    case "rec": {
+      const r = route.item;
+      const [w, h] = r.coverSize ?? [1000, 1510];
+      return { title: `${r.title} · ${route.shelf.name} · ${press.name}`,
+        description: r.lead.join(" ") || route.shelf.tagline, path: pathOf(route),
         image: { src: `/covers/${r.cover}.jpg`, width: 800, height: Math.round(h * 800 / w), alt: `Cover of ${r.title}` } };
     }
     case "title": {
@@ -350,7 +351,7 @@ function collectionShelf(c: Collection, cat: Catalogue, placed: Placed[], named:
 
 /** The catalogue's filter: All, then each shelf. Links, so every view has its own address;
  *  chips where there is room, a menu on a phone, where a dozen chips would stack. */
-function filter(cat: Catalogue, current?: Collection | "bibles"): TemplateResult {
+function filter(cat: Catalogue, current?: Collection | Recommendations): TemplateResult {
   const all = "/#books";
   const go = (e: Event) => nav.go((e.target as HTMLSelectElement).value);
   return html`<nav class="filter" aria-label="Collections">
@@ -358,14 +359,15 @@ function filter(cat: Catalogue, current?: Collection | "bibles"): TemplateResult
       <li><a href=${all} aria-current=${current ? nothing : "page"}>All</a></li>
       ${shelves(cat).map(c => html`<li><a href=${pathOf({ kind: "collection", collection: c })}
         aria-current=${c === current ? "page" : nothing}>${c.short}</a></li>`)}
-      <li><a href="/bibles/" aria-current=${current === "bibles" ? "page" : nothing}>${cat.press.bibles.short}</a></li>
+      ${cat.press.recommended.map(r => html`<li><a href="/${r.slug}/"
+        aria-current=${r === current ? "page" : nothing}>${r.short}</a></li>`)}
     </ul>
     <label class="filter-menu"><span>Show</span>
       <select @change=${go}>
         <option value=${all} ?selected=${!current}>All books</option>
         ${shelves(cat).map(c => html`<option value=${pathOf({ kind: "collection", collection: c })}
           ?selected=${c === current}>${shelfName(c, cat)}</option>`)}
-        <option value="/bibles/" ?selected=${current === "bibles"}>${cat.press.bibles.name}</option>
+        ${cat.press.recommended.map(r => html`<option value="/${r.slug}/" ?selected=${r === current}>${r.name}</option>`)}
       </select>
     </label>
   </nav>`;
@@ -465,16 +467,16 @@ export const affiliate = (url: string, tag: string) => {
 const strong = (p: string) => p.split("**").map((part, i) => i % 2 ? html`<strong>${part}</strong>` : part);
 
 /** The thanks and the affiliate disclosure, from the heart: a gold heart, the thanks in the
- *  press's script, the words with their heart in bold, and Amazon's required line beneath. On the shelf it stands above the
- *  cards; on a Bible's page, beside its Amazon button (`small`). */
+ *  press's script, the words with their heart in bold, and Amazon's required line beneath. On a shelf it stands above the
+ *  cards; on a book's page, beside its Amazon buttons (`small`). */
 const thanks = (cat: Catalogue, small = false) => html`<aside class=${small ? "rec-thanks rec-thanks-small" : "rec-thanks"}
   aria-label="About these links">
   <p class="rec-heart" aria-hidden="true">♥</p>
   <p class="rec-thanks-head">With our thanks</p>
-  ${cat.press.bibles.thanks.map(p => html`<p>${strong(p)}</p>`)}
+  ${cat.press.affiliate.thanks.map(p => html`<p>${strong(p)}</p>`)}
 </aside>`;
 
-/** A Bible's Amazon buttons, each its format's, green then blue, marked sponsored (affiliate
+/** A recommended book's Amazon buttons, each its format's, green then blue, marked sponsored (affiliate
  *  links). They stand on the shelf's cards too, as no book's do (owner, 2026-11-28), there
  *  small, a button to a row. */
 const recBuy = (r: Recommended, tag: string, small = false) => r.buy.map((b, i) => html`<a
@@ -482,22 +484,25 @@ const recBuy = (r: Recommended, tag: string, small = false) => r.buy.map((b, i) 
   rel="sponsored noopener" target="_blank"><span>${b.format} on Amazon<span class="sr"> (affiliate link):
   ${r.title}</span></span></a>`);
 
-/** A Bible's card on its shelf: as a book's card is, opening its own page, with its buttons. */
-const bibleCard = (r: Recommended, tag: string, eager: boolean, high = false) => html`<li class="card rec-card">
-  <a class="card-link" href="/bibles/${r.slug}/">
+/** A recommended book's card on its shelf: as a book's card is, opening its own page, with its
+ *  buttons and, as on its page, the words that they are affiliate links. */
+const recCard = (shelf: Recommendations, r: Recommended, tag: string, eager: boolean, high = false) => html`<li
+  class="card rec-card">
+  <a class="card-link" href="/${shelf.slug}/${r.slug}/">
     ${cover(r, "(max-width: 600px) 45vw, 230px", eager, high)}
     <span class="card-no">${r.publisher}</span>
     <span class="card-title">${r.title}</span>
     ${r.subtitle ? html`<span class="card-sub">${r.subtitle}</span>` : nothing}
   </a>
-  <p class="card-buy rec-buy">${recBuy(r, tag, true)}</p>
+  <p class="card-buy rec-buy">${recBuy(r, tag, true)}
+    <span class="rec-aff" aria-hidden="true">Affiliate link</span></p>
 </li>`;
 
-/** Bibles: the press's recommendations from other publishers, the thanks first, then a shelf. */
-function biblesPage(cat: Catalogue): TemplateResult {
-  const b = cat.press.bibles;
+/** A recommendation shelf (Bibles, Catechisms): other publishers' books, the thanks first, then
+ *  the cards. */
+function recsPage(b: Recommendations, cat: Catalogue): TemplateResult {
   return html`
-    ${filter(cat, "bibles")}
+    ${filter(cat, b)}
     <header class="collection-intro">
       <p class="collection-kicker">Recommended by Lérins Press · ${b.items.length} ${b.items.length === 1 ? "edition" : "editions"}</p>
       <h1 tabindex="-1"><span>${b.name}</span></h1>
@@ -507,28 +512,28 @@ function biblesPage(cat: Catalogue): TemplateResult {
     </header>
     ${thanks(cat)}
     <section class="collection" aria-label=${b.name}>
-      <ul class="shelf">${b.items.map((r, i) => bibleCard(r, b.tag, i < 4, i < 2))}</ul>
+      <ul class="shelf">${b.items.map((r, i) => recCard(b, r, cat.press.affiliate.tag, i < 4, i < 2))}</ul>
     </section>`;
 }
 
-/** A Bible's own page: laid out as a book's, its Amazon link marked sponsored (an affiliate link)
- *  and the thanks beside it. */
-function biblePage(r: Recommended, cat: Catalogue): TemplateResult {
+/** A recommended book's own page: laid out as a book's, its Amazon links marked sponsored
+ *  (affiliate links) and the thanks beside them. */
+function recPage(shelf: Recommendations, r: Recommended, cat: Catalogue): TemplateResult {
   return html`
     <nav class="back" aria-label="Back">
       <a href="/#books">Back to All Books</a>
-      <a href="/bibles/">Back to ${cat.press.bibles.name}</a>
+      <a href="/${shelf.slug}/">Back to ${shelf.name}</a>
     </nav>
     <article class="book">
       <div class="book-cover rec-cover">${cover(r, "(max-width: 720px) 70vw, 340px", true)}</div>
       <div class="book-text">
-        <p class="book-series"><a href="/bibles/">Recommended Bibles</a><span> · ${r.publisher}</span></p>
+        <p class="book-series"><a href="/${shelf.slug}/">Recommended ${shelf.name}</a><span> · ${r.publisher}</span></p>
         <h1 tabindex="-1">${r.title}</h1>
         ${r.subtitle ? html`<p class="book-sub">${r.subtitle}</p>` : nothing}
         ${r.binding ? html`<p class="book-by">${r.binding}</p>` : nothing}
         ${r.lead.length ? html`<div class="book-lead">${r.lead.map(p => html`<p>${p}</p>`)}</div>` : nothing}
         <p class="actions rec-actions">
-          ${recBuy(r, cat.press.bibles.tag)}
+          ${recBuy(r, cat.press.affiliate.tag)}
           <span class="rec-aff" aria-hidden="true">${r.buy.length > 1 ? "Affiliate links" : "Affiliate link"}</span>
         </p>
         ${r.description.length ? html`<div class="book-desc">${r.description.map(p => html`<p>${p}</p>`)}</div>` : nothing}
@@ -701,8 +706,8 @@ export function page(route: Route, cat: Catalogue, shown = SHELF_BATCH): Templat
   const { press } = cat;
   const body = route.kind === "home" ? home(cat, shown)
     : route.kind === "collection" ? collectionPage(route.collection, cat, shown)
-    : route.kind === "bibles" ? biblesPage(cat)
-    : route.kind === "bible" ? biblePage(route.bible, cat)
+    : route.kind === "recs" ? recsPage(route.shelf, cat)
+    : route.kind === "rec" ? recPage(route.shelf, route.item, cat)
     : route.kind === "title" ? titlePage(route.title, cat)
     : route.kind === "about" ? about(cat)
     : route.kind === "contact" ? contact()
@@ -713,7 +718,7 @@ export function page(route: Route, cat: Catalogue, shown = SHELF_BATCH): Templat
   // The site's doors, one list: the masthead's menu draws the main ones, and the colophon draws
   // those and the rest (the legal pages and the feeds), so the two never differ where they meet.
   const links = (all = false) => html`
-    <a href="/" aria-current=${here("home", "collection", "bibles", "bible")}>Books</a>
+    <a href="/" aria-current=${here("home", "collection", "recs", "rec")}>Books</a>
     <a href="/about/" aria-current=${here("about")}>About</a>
     <a href="/contact/" aria-current=${here("contact")}>Contact</a>
     ${all ? html`

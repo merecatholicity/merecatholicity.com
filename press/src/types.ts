@@ -19,10 +19,13 @@ export interface Press {
    *  Shaped as a collection so the filter and its page treat it as one, but it has no numbers
    *  and no series line. */
   originals: Collection;
-  /** Bibles: editions of Scripture from other publishers that the press recommends, bought on
-   *  Amazon through its affiliate links. Their own page (/bibles/), the filter's pill after
-   *  Originals, and never on the home page's shelves, which hold the press's own books. */
-  bibles: Recommendations;
+  /** The recommendation shelves (Bibles, Catechisms): other publishers' books the press
+   *  recommends, bought on Amazon through its affiliate links. Each its own page (/<slug>/), a
+   *  pill after Originals in this order, and never on the home page's shelves, which hold the
+   *  press's own books. */
+  recommended: Recommendations[];
+  /** The Amazon Associates links' tag and thanks, one for every recommendation shelf. */
+  affiliate: Affiliate;
   /** The press's collections, in shelf order: a title joins one by its slug. */
   collections: Collection[];
 }
@@ -42,20 +45,25 @@ export interface Collection {
   parts: { slug: string; name: string }[];
 }
 
-/** A page of other publishers' books the press recommends (Bibles): a shelf of cards, each
- *  opening its own page (/bibles/<slug>/). `thanks` is the affiliate disclosure, shown on the
- *  shelf and beside every Amazon link (words between ** are set in bold). */
+/** The Amazon Associates program, as the recommendation shelves use it. */
+export interface Affiliate {
+  /** The tracking ID, set on every Amazon link (views.ts `affiliate`), whatever tag it carried. */
+  tag: string;
+  /** The thanks and the affiliate disclosure, shown on each shelf and beside every Amazon link
+   *  (words between ** are set in bold). */
+  thanks: string[];
+}
+
+/** A page of other publishers' books the press recommends (Bibles, Catechisms): a shelf of
+ *  cards, each opening its own page (/<slug>/<item>/). */
 export interface Recommendations {
+  /** The page's address, /<slug>/: never a word the site's own pages use. */
   slug: string;
   name: string;
   /** The filter's label. */
   short: string;
   tagline: string;
-  /** The Amazon Associates tracking ID, added to every Amazon link on the page (views.ts
-   *  `affiliate`), so the links in `items` are written bare. */
-  tag: string;
   about: string[];
-  thanks: string[];
   items: Recommended[];
 }
 
@@ -132,8 +140,8 @@ export type Route =
   | { kind: "privacy" }
   | { kind: "terms" }
   | { kind: "collection"; collection: Collection }
-  | { kind: "bibles" }
-  | { kind: "bible"; bible: Recommended }
+  | { kind: "recs"; shelf: Recommendations }
+  | { kind: "rec"; shelf: Recommendations; item: Recommended }
   | { kind: "title"; title: Title }
   | { kind: "missing" };
 

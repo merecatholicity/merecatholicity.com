@@ -8,11 +8,11 @@
 // Writes content/covers/soon-<collection>.png, 1000x1510 (a 6x9 front with bleed), which
 // `make placeholders` turns into the cover's three files and removes.
 //
-// The recommended Bibles take the same front, theirs being other publishers' books (owner,
-// 2026-11-28): the Bible's title and subtitle, the shield, its bindings where "Cover coming soon"
+// The recommended books (Bibles, Catechisms) take the same front, theirs being other publishers' books (owner,
+// 2026-11-28): the book's title and subtitle, the shield, its bindings where "Cover coming soon"
 // stands, and "Image currently unavailable" at the foot. Neither the press's name nor the
 // publisher's: another house's name on a front with our shield reads as their cover, or a joint
-// edition. bible-<slug>.png, cut the same way.
+// edition. <cover>.png, cut the same way.
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -81,5 +81,5 @@ for (const c of [...press.collections, press.originals]) {
   await draw(name, c.accent, c.name, c.tagline, "Cover coming soon", "LÉRINS PRESS");
 }
 
-for (const r of press.bibles.items)
+for (const r of press.recommended.flatMap(shelf => shelf.items))
   await draw(r.cover, CRIMSON, r.title, r.subtitle ?? "", r.buy.map(b => b.format).join(" · "), "Image currently unavailable", 54, 30);
