@@ -4667,6 +4667,95 @@
     ]
   },
   {
+    "slug": "state-ratification-debates",
+    "title": "That Precious Jewel",
+    "subtitle": "The State Ratification Debates of Virginia, New York, Massachusetts and North Carolina, with the Pennsylvania Dissent and the Forms of Ratification, 1787–1791",
+    "author": "Patrick Henry, James Madison and Others",
+    "format": "Paperback",
+    "listed": "2026-11-27",
+    "cover": "state-ratification-debates",
+    "collection": {
+      "slug": "lerins-america",
+      "no": 48,
+      "part": "founding"
+    },
+    "lead": [
+      "The state conventions’ great debates over the Constitution, 1787-1788: Patrick Henry and George Mason against Madison and Randolph at Richmond in their opening days and the decision, Melancton Smith and Lansing against Hamilton at Poughkeepsie, the plain farmers of Massachusetts, North Carolina’s refusal, the Address and Reasons of Dissent of the Minority of Pennsylvania, and every state’s form of ratification and proposed amendments."
+    ],
+    "description": [
+      "The Constitution signed at Philadelphia on September 17, 1787 was only a proposal until nine states ratified it in conventions chosen by the people. Pennsylvania ratified in December 1787, and the minority of its convention went home and published their reasons for refusing. Massachusetts ratified on February 6, 1788, by 187 votes to 168. Virginia met at Richmond on June 2, 1788, the largest of the states and still undecided, and for more than three weeks Patrick Henry led the opposition there. New York met at Poughkeepsie on June 17. North Carolina met at Hillsborough in July, and on August 1 it voted down ratification and asked for a declaration of rights and amendments first. This volume gives those debates day by day, from the opening at Richmond to the final votes: the case against the Constitution, and the answers of the men who carried the day.",
+      "Henry rises as \"a sentinel over their rights, liberty, and happiness\" and asks who authorized the Philadelphia delegates to \"speak the language of, We, the people, instead of, We, the states\". George Mason presses on direct taxes and the swallowing up of the states. Edmund Randolph, who had refused to sign the plan at Philadelphia, now defends it, and James Madison answers point by point. At Poughkeepsie John Lansing speaks for a confederated republic, Melancton Smith asks for a House large enough to admit \"the middling class of life\" beside \"the natural aristocracy\", and Alexander Hamilton replies. At Boston Amos Singletary distrusts \"these lawyers and men of learning, and moneyed men, that talk so finely\", and Jonathan Smith, \"a plain man\" who gets his living by the plough, speaks to his \"brother ploughjoggers\". The Pennsylvania minority sets out fourteen amendments. The volume closes with Virginia’s twenty articles of rights, its vote of 89 to 79, Henry’s promise to be \"a peaceable citizen\", and the forms in which every state gave its assent.",
+      "Each day is printed whole, as the reporters had it, from Jonathan Elliot’s The Debates in the Several State Conventions on the Adoption of the Federal Constitution, in its second edition of 1836 as reprinted in 1907, and the Pennsylvania Address is printed whole from McMaster and Stone’s Pennsylvania and the Federal Constitution (1888), which took it from The Pennsylvania Packet of December 18, 1787. The Editors of the Mere Catholicity Project add a new introduction on the ratifying conventions and the men in them, a note on the text and on how the debates were taken down, and notes on persons, places, offices, events and the words of the time, with a glossary and an index of speakers and subjects. In Lérins America it closes the part The Founding and the Republic, after Madison’s Notes of Debates in the Federal Convention, The Federalist, Brutus and the Federal Farmer, and Hamilton and Jefferson on the Constitution."
+    ],
+    "contents": [
+      {
+        "items": [
+          "Introduction",
+          "A Note on the Text"
+        ]
+      },
+      {
+        "part": "Part I. Pennsylvania: The Minority's Reasons",
+        "items": [
+          "The Address and Reasons of Dissent of the Minority of the Convention of the State of Pennsylvania to Their Constituents (December 18, 1787)"
+        ]
+      },
+      {
+        "part": "Part II. Massachusetts: The Farmers Speak",
+        "items": [
+          "Friday, January 25, 1788: Amos Singletary, Jonathan Smith, Fisher Ames, Theophilus Parsons and Others"
+        ]
+      },
+      {
+        "part": "Part III. Virginia: The Opening Debates at Richmond",
+        "items": [
+          "Monday, June 2, 1788: The Convention Meets",
+          "Tuesday, June 3, 1788: George Mason and Others",
+          "Wednesday, June 4, 1788: George Nicholas, Patrick Henry, Edmund Randolph, George Mason",
+          "Thursday, June 5, 1788: Edmund Pendleton, Henry Lee, Patrick Henry",
+          "Friday, June 6, 1788: Edmund Randolph, James Madison, George Nicholas",
+          "Saturday, June 7, 1788: Francis Corbin, Edmund Randolph, Patrick Henry, James Madison",
+          "Monday, June 9, 1788: Patrick Henry, Henry Lee, Edmund Randolph"
+        ]
+      },
+      {
+        "part": "Part IV. New York: Representation at Poughkeepsie",
+        "items": [
+          "Friday, June 20, 1788: John Lansing, Melancton Smith, Alexander Hamilton",
+          "Saturday, June 21, 1788: John Williams, Melancton Smith, Alexander Hamilton, John Lansing"
+        ]
+      },
+      {
+        "part": "Part V. Virginia: The Decision",
+        "items": [
+          "Tuesday, June 24, 1788: George Wythe, Patrick Henry, John Dawson, Edmund Randolph, James Madison, William Grayson, George Mason",
+          "Wednesday, June 25, 1788: James Innes, Zachariah Johnson, John Tyler, Edmund Randolph, Patrick Henry; the Votes",
+          "Thursday, June 26, 1788",
+          "Friday, June 27, 1788: The Declaration of Rights and the Amendments"
+        ]
+      },
+      {
+        "part": "Part VI. North Carolina: Neither to Ratify nor Reject",
+        "items": [
+          "Friday, August 1, 1788: William R. Davie, Samuel Spencer, James Iredell, Willie Jones; the Declaration of Rights and Amendments",
+          "Saturday, August 2, 1788, to the Adjournment"
+        ]
+      },
+      {
+        "part": "Part VII. The Ratifications of the States",
+        "items": [
+          "The Ratifications of the Constitution by the Several States, Delaware to Vermont, with the Proceedings of Congress (1787-1791)"
+        ]
+      },
+      {
+        "items": [
+          "Glossary",
+          "Index"
+        ]
+      }
+    ]
+  },
+  {
     "slug": "the-reformed-catholic-reader-1",
     "title": "The Reformed Catholic Reader, Volume I",
     "subtitle": "Calvin on the Church, Baptism, and the Supper",
