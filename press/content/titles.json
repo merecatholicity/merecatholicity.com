@@ -4221,6 +4221,64 @@
     ]
   },
   {
+    "slug": "god-had-chosen-this-country",
+    "title": "God Had Chosen This Country",
+    "subtitle": "Winthrop’s Journal, Mary Rowlandson’s Captivity and the Salem Witch Trials, 1630–1697",
+    "author": "John Winthrop, Mary Rowlandson and Cotton Mather",
+    "format": "Paperback",
+    "listed": "2026-11-27",
+    "cover": "god-had-chosen-this-country",
+    "collection": {
+      "slug": "lerins-america",
+      "no": 41,
+      "part": "colonies"
+    },
+    "lead": [
+      "Massachusetts Bay in its founders’ own words: John Winthrop’s Journal from the Arbella in 1630 to 1640, Mary Rowlandson’s narrative of her captivity in King Philip’s War (1682), and the Salem witch trials in Cotton Mather’s Wonders of the Invisible World (1693) and the court’s own papers."
+    ],
+    "description": [
+      "John Winthrop was chosen governor of the Massachusetts Bay Company in England in October 1629, and on Easter Monday 1630 he began a journal aboard the Arbella as she rode at Cowes. He kept it for the rest of his life. In its first ten years the reader watches the Bay colony made: the crossing, the hungry first winters, the churches and towns gathered, the magistrates elected and the laws argued, Roger Williams banished, Anne Hutchinson tried, and the Pequot War of 1637 fought. Winthrop records storms, shipwrecks, fires, strange births, quarrels with the Dutch and the French, and every turn of the colony’s fortune as the hand of God. In 1640, when men in England said the settlers should leave for a better country, he wrote to Lord Say “how evident it was, that God had chosen this country to plant his people in,” and that it would be dangerous to hinder the work. The volume takes its title from those words.",
+      "On the tenth of February 1676 Indians of King Philip’s War burned Lancaster and carried off the minister’s wife, Mary Rowlandson, with three of her children. Her youngest died in her arms. In eleven weeks and twenty removes she was led through the forests of central Massachusetts and the upper Connecticut valley, met Philip himself, and was ransomed in May. Her narrative, printed in 1682, was read in every New England house. In 1692 the afflicted girls of Salem Village cried out on their neighbours for witchcraft, and a special court tried them. Cotton Mather wrote the court’s own account of five of its trials, with sermons on the Devil’s war against New England, and the clerks’ records give the first confession, of Tituba, and Mary Easty’s plea that “if it be possible no more Innocent blood may be shed.” In 1697 one of the judges asked pardon before his church, and twelve of the jurors signed a paper asking forgiveness.",
+      "This edition prints each piece whole within its stated scope: Winthrop’s Journal from its first entry to the end of his governorship in May 1640, from the 1908 edition of the journal, Rowlandson’s narrative with its preface from the Cambridge edition of 1682, Mather’s Wonders of the Invisible World entire with the letter of the chief judge that approved it, and the Salem papers as they were printed from the original records in 1864. The spelling of the originals is kept, and nothing is cut inside any piece. The Editors of the Mere Catholicity Project add a new introduction on the Puritan commonwealth, King Philip’s War and the Salem court, and notes on the people, places, offices, Scripture and old words the reader meets, with a glossary and an index. It is the third of three volumes of the colonies in their founders’ own words, after Captain John Smith’s Generall Historie of Virginia and William Bradford’s Of Plimoth Plantation."
+    ],
+    "contents": [
+      {
+        "items": [
+          "Introduction",
+          "A Note on the Text"
+        ]
+      },
+      {
+        "part": "Part I. The Journal of John Winthrop, 1630-1640",
+        "items": [
+          "Winthrop’s Journal, \"The History of New England\": From the Arbella at Cowes to the End of His Governorship, John Winthrop (March 1630-May 1640)"
+        ]
+      },
+      {
+        "part": "Part II. The Captivity, 1676",
+        "items": [
+          "The Sovereignty and Goodness of God: A Narrative of the Captivity and Restoration of Mrs. Mary Rowlandson, with the Preface to the Reader, Mary Rowlandson (1682)"
+        ]
+      },
+      {
+        "part": "Part III. The Witchcraft at Salem, 1692-1697",
+        "items": [
+          "The Papers in the Case of Tituba, Salem Village (February-March 1692)",
+          "The Wonders of the Invisible World, Cotton Mather (1693)",
+          "The Petitions of Mary Easty and of Mary Easty and Sarah Cloyce (September 1692)",
+          "The Jurymen’s Acknowledgement, Thomas Fisk and Eleven Jurors (c. 1697)",
+          "The Bill Put Up on the Fast Day, Samuel Sewall (January 14, 1697)"
+        ]
+      },
+      {
+        "items": [
+          "Glossary",
+          "Index"
+        ]
+      }
+    ]
+  },
+  {
     "slug": "the-reformed-catholic-reader-1",
     "title": "The Reformed Catholic Reader, Volume I",
     "subtitle": "Calvin on the Church, Baptism, and the Supper",
