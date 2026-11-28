@@ -76,17 +76,20 @@ class Ledger(unittest.TestCase):
 
 class Places(unittest.TestCase):
     def test_the_community_front_carries_its_ledger_book_and_its_rooms_none(self):
-        with open(os.path.join(m.ROOT, 'app', 'views', 'board.ts'), encoding='utf-8') as f:
+        with open(os.path.join(m.ROOT, 'app', 'views', 'board_door.ts'), encoding='utf-8') as f:
             src = f.read()
+        with open(os.path.join(m.ROOT, 'app', 'views', 'board.ts'), encoding='utf-8') as f:
+            board = f.read()
         book = LEDGER['books'][LEDGER['places']['community']]
         url = m.amazon_url(book['asin'], book['link_id']).replace('&amp;', '&')
-        self.assertEqual(src.count(url), 1, 'board.ts must carry the ledger\'s community book once')
+        self.assertEqual(src.count(url), 1, 'board_door.ts must carry the ledger\'s community book once')
         self.assertIn('rel="sponsored noopener"', src)
         self.assertIn('As an Amazon Associate we earn from qualifying purchases.', src)
         # only the index renders it: the category view and its threads stay clean
-        index, cat = src.split("customElements.define('mc-board-index'")
-        self.assertIn('${summaTpl}', index)
-        self.assertNotIn('${summaTpl}', cat)
+        index, cat = board.split("customElements.define('mc-board-index'")
+        self.assertIn("import('./board_door.ts')", index)
+        self.assertIn('${this.door}', index)
+        self.assertNotIn('board_door', cat)
 
 
 class Placement(unittest.TestCase):
