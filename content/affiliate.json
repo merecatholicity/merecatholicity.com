@@ -1,0 +1,284 @@
+{
+ "about": "The Library's doors to print, one record (scripts/inject_support.py reads it; the scraping-amazon-affiliate-link skill writes it). books: Amazon affiliate boxes, each a SiteStripe link (asin + linkId, tag lerinspress-20). doors: boxes to the press's recommendation shelves. shelves: each Library shelf's catch-all (a book, a door, or \"lerins:<slug>\" for our own edition on sale) (its overview and every work without its own). works: a page's own book or door, {lerins: slug} for our own edition's card, {miss: why, date} for a search that found no good edition, {hand: why} for a page that carries a box written by hand.",
+ "books": {
+  "summa-dominican-5vol": {
+   "asin": "0870610635",
+   "link_id": "d6f69fb52e1f737aef389e1afe9b1cea",
+   "words": "Would you like the Summa in print? The English Dominican translation read here comes as a five-volume hardcover set.",
+   "label": "Buy on Amazon (Hardcover, 5 volumes)"
+  },
+  "newman-essay-notre-dame": {
+   "asin": "026800921X",
+   "link_id": "20e6b7a13c0b8b1184c44bada0cf3329",
+   "words": "Would you like Newman in print? His <em>Essay on the Development of Christian Doctrine</em>, the 1878 edition with a foreword by Ian Ker, is still the classic text on how doctrine grows, in paperback from the University of Notre Dame Press.",
+   "label": "Buy the Essay on Amazon (Paperback)"
+  },
+  "newman-apologia-penguin": {
+   "asin": "0140433740",
+   "link_id": "c0a438ed64b54cb484072f14119d589c",
+   "words": "Would you like the <em>Apologia</em> in print? The Penguin Classics edition, edited with an introduction by Ian Ker, is in paperback.",
+   "label": "Buy the Apologia on Amazon (Paperback)"
+  },
+  "newman-grammar-notre-dame": {
+   "asin": "0268010005",
+   "link_id": "6aeb541c97e4602a56c62e0dbf860734",
+   "words": "Would you like the <em>Grammar of Assent</em> in print? The University of Notre Dame Press keeps it in paperback, with an introduction by Nicholas Lash.",
+   "label": "Buy the Grammar of Assent on Amazon (Paperback)"
+  },
+  "city-of-god-bettenson": {
+   "asin": "0140448942",
+   "link_id": "d6fec6cec769956677626c8b4b4b0569",
+   "words": "Would you like Augustine in print? <em>The City of God</em>, in Henry Bettenson&rsquo;s translation, is in paperback from Penguin Classics.",
+   "label": "Buy the City of God on Amazon (Paperback)"
+  },
+  "luther-theses-penguin": {
+   "asin": "0143107585",
+   "link_id": "9a0b71aa31df4fe35e9d27d86e73b860",
+   "words": "Would you like Luther in print? <em>The Ninety-Five Theses and Other Writings</em>, translated and edited by William R. Russell, is in paperback from Penguin Classics.",
+   "label": "Buy the Ninety-Five Theses on Amazon (Paperback)"
+  },
+  "luther-bondage-baker": {
+   "asin": "0801048931",
+   "link_id": "49d4a9499617f65ab56d6599516a2f26",
+   "words": "Would you like <em>The Bondage of the Will</em> in print? J. I. Packer and O. R. Johnston&rsquo;s translation is in paperback from Baker Academic.",
+   "label": "Buy the Bondage of the Will on Amazon (Paperback)"
+  },
+  "luther-galatians-crossway": {
+   "asin": "0891079947",
+   "link_id": "27d85a7d1b8ac7ec67011b8178a37100",
+   "words": "Would you like Luther&rsquo;s <em>Galatians</em> in print? The Crossway Classic Commentaries edition, edited by Alister McGrath and J. I. Packer, is in paperback.",
+   "label": "Buy Luther on Galatians on Amazon (Paperback)"
+  },
+  "calvin-institutes-hendrickson": {
+   "asin": "1598561685",
+   "link_id": "f4c070a1aad3d30d438050ac44cbf6f3",
+   "words": "Would you like the <em>Institutes</em> in print? Henry Beveridge&rsquo;s translation, the one read here, is in one hardcover volume from Hendrickson.",
+   "label": "Buy the Institutes on Amazon (Hardcover)"
+  },
+  "jewel-apology-davenant": {
+   "asin": "194971604X",
+   "link_id": "14bbab84dfb0a265198e05d7c479f01c",
+   "words": "Would you like Jewel&rsquo;s <em>Apology</em> in print? The Davenant Press edition, edited by Robin Harris and Andre Gazal, is in paperback.",
+   "label": "Buy the Apology on Amazon (Paperback)"
+  },
+  "chesterton-everlasting-ignatius": {
+   "asin": "0898704448",
+   "link_id": "6b0ef77eab7fcc896f0ff9819c021235",
+   "words": "Would you like <em>The Everlasting Man</em> in print? Ignatius Press keeps it in paperback.",
+   "label": "Buy the Everlasting Man on Amazon (Paperback)"
+  },
+  "gibbons-faith-tan": {
+   "asin": "0895551586",
+   "link_id": "b5b852530fb33db4370fc12d849db80b",
+   "words": "Would you like <em>The Faith of Our Fathers</em> in print? TAN Books keeps Cardinal Gibbons&rsquo;s classic in paperback.",
+   "label": "Buy the Faith of Our Fathers on Amazon (Paperback)"
+  },
+  "councils-davis": {
+   "asin": "0814656161",
+   "link_id": "b9a2fde73950afd1b61a6df6fedba7a0",
+   "words": "Would you like the councils in print? Leo Donald Davis&rsquo;s <em>The First Seven Ecumenical Councils (325&ndash;787): Their History and Theology</em> is in paperback from the Liturgical Press.",
+   "label": "Buy the First Seven Ecumenical Councils on Amazon (Paperback)"
+  },
+  "guettee-papacy-uncut": {
+   "asin": "163941035X",
+   "link_id": "58498f73bf18620140dd4f61962a6465",
+   "words": "Would you like Guettée&rsquo;s <em>The Papacy</em> in print? Uncut Mountain Press keeps it in paperback.",
+   "label": "Buy the Papacy on Amazon (Paperback)"
+  },
+  "vincent-commonitory-osjusti": {
+   "asin": "1965303188",
+   "link_id": "dc6408f6f07cee4362048de45c755b4e",
+   "words": "Would you like the <em>Commonitory</em> in print? Os Justi Press keeps Vincent of Lérins&rsquo;s rule of faith in paperback.",
+   "label": "Buy the Commonitory on Amazon (Paperback)"
+  },
+  "ignatius-letters-svs": {
+   "asin": "0881414646",
+   "link_id": "053fe55855498451b4bebbd0e826d487",
+   "words": "Would you like Ignatius in print? <em>The Letters</em>, in St Vladimir&rsquo;s Seminary Press&rsquo;s Popular Patristics series, is in paperback.",
+   "label": "Buy the Letters on Amazon (Paperback)"
+  },
+  "apostolic-fathers-holmes": {
+   "asin": "0801031087",
+   "link_id": "5fdd79b8d30aeb75aa4dfbe4f17820fb",
+   "words": "Would you like Clement in print? <em>The Apostolic Fathers in English</em>, edited by Michael W. Holmes, is in paperback from Baker Academic.",
+   "label": "Buy the Apostolic Fathers on Amazon (Paperback)"
+  },
+  "justin-apologies-cua": {
+   "asin": "0813215528",
+   "link_id": "2f9d9645f632377ddb0fd6dfa525dd79",
+   "words": "Would you like Justin in print? His <em>First Apology</em>, with the Second and the Dialogue with Trypho, is in the Catholic University of America Press&rsquo;s Fathers of the Church series.",
+   "label": "Buy Justin Martyr on Amazon (Paperback)"
+  },
+  "early-christian-writings-penguin": {
+   "asin": "0140444750",
+   "link_id": "801b4eca0b01620d0e14f4c5244c7ce0",
+   "words": "Would you like the <em>Didache</em> in print? Penguin Classics prints it in <em>Early Christian Writings: The Apostolic Fathers</em>, in paperback.",
+   "label": "Buy Early Christian Writings on Amazon (Paperback)"
+  },
+  "irenaeus-book3-acw": {
+   "asin": "0809105896",
+   "link_id": "33a396f799ed7888ca538a37b0d5356c",
+   "words": "Would you like Irenaeus in print? <em>Against the Heresies</em>, Book 3, is in Paulist&rsquo;s Ancient Christian Writers series, in paperback.",
+   "label": "Buy Against the Heresies, Book 3 on Amazon (Paperback)"
+  },
+  "tertullian-baptism-evans": {
+   "asin": "1498295789",
+   "link_id": "3c65b35f422c9f2999f3546babdd81ce",
+   "words": "Would you like Tertullian&rsquo;s <em>On Baptism</em> in print? Ernest Evans&rsquo;s edition, with the text, translation and commentary, is in paperback.",
+   "label": "Buy Tertullian on Baptism on Amazon (Paperback)"
+  },
+  "cyprian-church-svs": {
+   "asin": "0881413127",
+   "link_id": "fc0359d6e324be193af0b1ad2eb4d60d",
+   "words": "Would you like Cyprian in print? <em>On the Church: Select Treatises</em>, with <em>On the Unity of the Church</em>, is in St Vladimir&rsquo;s Seminary Press&rsquo;s Popular Patristics series.",
+   "label": "Buy On the Church on Amazon (Paperback)"
+  },
+  "cyril-lectures-lf": {
+   "asin": "1666731722",
+   "link_id": "ddfa7b73ebac3d7d681c2c42bea2bcf3",
+   "words": "Would you like Cyril in print? <em>The Catechetical Lectures</em>, in the Library of the Fathers translation, is in paperback.",
+   "label": "Buy the Catechetical Lectures on Amazon (Paperback)"
+  },
+  "nyssa-catechetical-svs": {
+   "asin": "0881416487",
+   "link_id": "4878c0c55cfd068ce2a53469bb59883d",
+   "words": "Would you like Gregory of Nyssa in print? His <em>Catechetical Discourse</em> is in St Vladimir&rsquo;s Seminary Press&rsquo;s Popular Patristics series, in paperback.",
+   "label": "Buy the Catechetical Discourse on Amazon (Paperback)"
+  },
+  "nyssa-soul-svs": {
+   "asin": "0881411205",
+   "link_id": "2558bb221378769ac2f62ee1735ae9a2",
+   "words": "Would you like Gregory of Nyssa in print? <em>On the Soul and the Resurrection</em> is in St Vladimir&rsquo;s Seminary Press&rsquo;s Popular Patristics series, in paperback.",
+   "label": "Buy On the Soul and the Resurrection on Amazon (Paperback)"
+  }
+ },
+ "doors": {
+  "press-bibles": {
+   "href": "https://press.merecatholicity.com/bibles/",
+   "words": "Would you like a Bible in print? Lérins Press keeps a shelf of editions we recommend for reading and study.",
+   "button": "See the recommended Bibles",
+   "note": "The Bibles page&rsquo;s Amazon links are affiliate links."
+  },
+  "press-catechisms": {
+   "href": "https://press.merecatholicity.com/catechisms/",
+   "words": "Would you like a catechism in print? Lérins Press keeps a shelf of catechisms and confessions we recommend for learning the faith.",
+   "button": "See the recommended catechisms",
+   "note": "The Catechisms page&rsquo;s Amazon links are affiliate links."
+  }
+ },
+ "shelves": {
+  "scripture": "press-bibles",
+  "creeds": "press-catechisms",
+  "fathers": "city-of-god-bettenson",
+  "schaff": "city-of-god-bettenson",
+  "aquinas": "summa-dominican-5vol",
+  "newman": "newman-essay-notre-dame",
+  "reformers": "calvin-institutes-hendrickson",
+  "apologetics": "lerins:heretics-and-orthodoxy",
+  "papers": "lerins:mere-catholicity",
+  "councils": "councils-davis"
+ },
+ "works": {
+  "kjv.html": {
+   "hand": "the Bible page's box is written in docs/kjv.html"
+  },
+  "douay-rheims.html": {
+   "hand": "the Bible page's box is written in docs/douay-rheims.html"
+  },
+  "lectio-divina.html": {
+   "hand": "content/lectio-divina.html recommends its own Bible, with its own affiliate links"
+  },
+  "catena-matthew.html": {
+   "lerins": "catena-aurea-on-st-matthew"
+  },
+  "catena-mark.html": {
+   "lerins": "catena-aurea-on-st-mark"
+  },
+  "catena-luke.html": {
+   "lerins": "catena-aurea-on-st-luke"
+  },
+  "catena-john.html": {
+   "lerins": "catena-aurea-on-st-john"
+  },
+  "apologia.html": "newman-apologia-penguin",
+  "grammar.html": "newman-grammar-notre-dame",
+  "luther-primary.html": "luther-theses-penguin",
+  "bondage.html": "luther-bondage-baker",
+  "luther-galatians.html": "luther-galatians-crossway",
+  "institutes.html": "calvin-institutes-hendrickson",
+  "jewel.html": "jewel-apology-davenant",
+  "everlasting.html": "chesterton-everlasting-ignatius",
+  "gibbons.html": "gibbons-faith-tan",
+  "hooker.html": {
+   "miss": "the only whole edition from a name-brand house is OUP's critical edition at $659.94; Cambridge's McGrade paperback is selections only",
+   "date": "2026-11-28"
+  },
+  "book.html": {
+   "lerins": "mere-catholicity"
+  },
+  "heretics.html": {
+   "lerins": "heretics-and-orthodoxy"
+  },
+  "orthodoxy.html": {
+   "lerins": "heretics-and-orthodoxy"
+  },
+  "oxford-sermons.html": {
+   "lerins": "newman-oxford-sermons"
+  },
+  "miracles.html": {
+   "lerins": "newman-miracles"
+  },
+  "arians.html": {
+   "lerins": "newman-arians"
+  },
+  "guettee.html": "guettee-papacy-uncut",
+  "commonitory.html": "vincent-commonitory-osjusti",
+  "ignatius.html": "ignatius-letters-svs",
+  "clement.html": "apostolic-fathers-holmes",
+  "justin.html": "justin-apologies-cua",
+  "didache.html": "early-christian-writings-penguin",
+  "irenaeus3.html": "irenaeus-book3-acw",
+  "baptism.html": "tertullian-baptism-evans",
+  "unity.html": "cyprian-church-svs",
+  "cyril.html": "cyril-lectures-lf",
+  "gregory.html": "nyssa-catechetical-svs",
+  "soulres.html": "nyssa-soul-svs",
+  "councils.html": "councils-davis",
+  "ravenna.html": {
+   "miss": "no edition of the document in print; one search",
+   "date": "2026-11-28"
+  },
+  "chieti.html": {
+   "miss": "no edition of the document in print; one search",
+   "date": "2026-11-28"
+  },
+  "encyclical1848.html": {
+   "miss": "no edition of the encyclical in print from a reputable house; one search",
+   "date": "2026-11-28"
+  },
+  "encyclical1895.html": {
+   "miss": "no name-brand edition; only a small-press Makrakis volume",
+   "date": "2026-11-28"
+  },
+  "apostolicae.html": {
+   "miss": "the one sane book (Hill and Yarnold, Anglican Orders: The Documents in the Debate, Canterbury Press) is out of print, $61.16 from a third-party seller only",
+   "date": "2026-11-28"
+  },
+  "saepius.html": {
+   "miss": "same search as Apostolicae Curae: Hill/Yarnold out of print and dear; the standalone edition is a 2017 self-published reprint",
+   "date": "2026-11-28"
+  },
+  "scranton.html": {
+   "miss": "no edition in print; one search",
+   "date": "2026-11-28"
+  },
+  "jddj.html": {
+   "miss": "the Eerdmans edition (47 pp.) is out of print, $97.70 from a third-party seller only",
+   "date": "2026-11-28"
+  },
+  "bishop-of-rome.html": {
+   "miss": "the site's own compilation",
+   "date": "2026-11-28"
+  }
+ }
+}

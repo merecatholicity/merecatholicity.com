@@ -338,6 +338,7 @@ css:
 .PHONY: content
 content:
 	python scripts/content.py
+	python scripts/inject_support.py
 
 # Rebuild the site menus from nav.yml: regenerates nav.html, rewrites the
 # nav block in the hand pages, rebuilds the content pages from the fresh nav,
@@ -346,6 +347,7 @@ content:
 menu:
 	python scripts/nav.py
 	python scripts/content.py
+	python scripts/inject_support.py
 	$(MAKE) html
 
 .PHONY: chart-pdfs

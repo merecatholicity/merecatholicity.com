@@ -157,6 +157,7 @@ on page one.)
 - **A Build cancelled by a newer merge no longer loses its changes, and merecat follows the Build that carries its commit (2026-10-09)** — `log/2026-10.md`
 - **The corpus sweeps know pandoc by its prefix, so a current pandoc builds the same site (2026-11-04)** — `log/2026-11.md`
 - **The Scripture and confession pages carry the press's thanks box, a door to its recommended books or an Amazon affiliate link (2026-11-28)** — `log/2026-11.md`
+- **Every Library work's door to print reads one ledger, content/affiliate.json (2026-11-28)** — `log/2026-11.md`
 
 ### The PureScript application layer
 

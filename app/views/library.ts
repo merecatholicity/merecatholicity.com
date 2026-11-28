@@ -47,7 +47,7 @@ export function parseLibrary(main: Element): LibraryModel {
       else { group = { name: el.textContent!.trim(), id: el.id || slug(el.textContent), works: [] }; cat.groups.push(group); }
       return;
     }
-    if (tag === 'ASIDE' && el.classList.contains('mc-support') && cat) { cat.aside = el; return; }
+    if (tag === 'ASIDE' && (el.classList.contains('mc-support') || el.classList.contains('mc-edition')) && cat) { cat.aside = el; return; }
     if (tag === 'UL' && el.classList.contains('library') && cat) {
       cat._seenUl = true;
       if (!group) { group = { name: '', id: '', works: [] }; cat.groups.push(group); }
@@ -227,7 +227,7 @@ export function mountLibrary(main: Element | null) {
   node.model = model;
   /* strip the flat catalog (everything the parser consumed) and mount the app view */
   Array.prototype.slice.call(main.children).forEach(function (el: Element) {
-    if (/^(H1|H2|H3|P|UL)$/.test(el.tagName) || el.matches('aside.mc-support')) main.removeChild(el);
+    if (/^(H1|H2|H3|P|UL)$/.test(el.tagName) || el.matches('aside.mc-support, aside.mc-edition')) main.removeChild(el);
   });
   main.insertBefore(node, main.firstChild);
 }
