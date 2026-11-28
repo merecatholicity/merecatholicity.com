@@ -19,6 +19,10 @@ export interface Press {
    *  Shaped as a collection so the filter and its page treat it as one, but it has no numbers
    *  and no series line. */
   originals: Collection;
+  /** Bibles: editions of Scripture from other publishers that the press recommends, bought on
+   *  Amazon through its affiliate links. Their own page (/bibles/), the filter's pill after
+   *  Originals, and never on the home page's shelves, which hold the press's own books. */
+  bibles: Recommendations;
   /** The press's collections, in shelf order: a title joins one by its slug. */
   collections: Collection[];
 }
@@ -36,6 +40,43 @@ export interface Collection {
   about: string[];
   /** Its parts in order. A collection without parts is one run. */
   parts: { slug: string; name: string }[];
+}
+
+/** A page of other publishers' books the press recommends (Bibles): a shelf of cards, each
+ *  opening its own page (/bibles/<slug>/). `thanks` is the affiliate disclosure, shown on the
+ *  shelf and beside every Amazon link (words between ** are set in bold). */
+export interface Recommendations {
+  slug: string;
+  name: string;
+  /** The filter's label. */
+  short: string;
+  tagline: string;
+  /** The Amazon Associates tracking ID, added to every Amazon link on the page (views.ts
+   *  `affiliate`), so the links in `items` are written bare. */
+  tag: string;
+  about: string[];
+  thanks: string[];
+  items: Recommended[];
+}
+
+/** One recommended book: its Amazon pages (affiliate links), its cover under covers/ (make
+ *  cover: WebP at 1000, 480 and 360 and an 800-wide .jpg), and the press's own words on it. */
+export interface Recommended {
+  slug: string;
+  title: string;
+  subtitle?: string;
+  publisher: string;
+  /** The binding and the publisher's number, where an edition comes in several. */
+  binding?: string;
+  cover: string;
+  /** Its Amazon pages (affiliate links), one per format (Leatherbound, Bonded leather, Hardcover),
+   *  in the order the buttons stand: green, then blue. The card names every format, so a reader
+   *  sees what each listing is before opening it. */
+  buy: { format: string; url: string }[];
+  lead: string[];
+  description: string[];
+  /** The cover's size at 1000 wide, read from its .jpg by the build: never written in press.json. */
+  coverSize?: [number, number];
 }
 
 export interface Title {
@@ -91,6 +132,8 @@ export type Route =
   | { kind: "privacy" }
   | { kind: "terms" }
   | { kind: "collection"; collection: Collection }
+  | { kind: "bibles" }
+  | { kind: "bible"; bible: Recommended }
   | { kind: "title"; title: Title }
   | { kind: "missing" };
 

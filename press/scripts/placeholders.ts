@@ -7,6 +7,12 @@
 //
 // Writes content/covers/soon-<collection>.png, 1000x1510 (a 6x9 front with bleed), which
 // `make placeholders` turns into the cover's three files and removes.
+//
+// The recommended Bibles take the same front, theirs being other publishers' books (owner,
+// 2026-11-28): the Bible's title and subtitle, the shield, its bindings where "Cover coming soon"
+// stands, and "Image currently unavailable" at the foot. Neither the press's name nor the
+// publisher's: another house's name on a front with our shield reads as their cover, or a joint
+// edition. bible-<slug>.png, cut the same way.
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,30 +44,42 @@ const press = JSON.parse(readFileSync(join(ROOT, "content/press.json"), "utf8"))
 const titles = JSON.parse(readFileSync(join(ROOT, "content/titles.json"), "utf8")) as { cover: string }[];
 const wanted = new Set(titles.map(t => t.cover).filter(c => c.startsWith("soon-")));
 
-for (const c of [...press.collections, press.originals]) {
-  const name = `soon-${c.slug}`;
-  if (!wanted.has(name)) continue;
-  // The two gold rules are boxes pinned by their edges: flex sizing lets a border run off the page.
-  const inset = (n: number, rest: Record<string, string | number>, ...children: (Node | string)[]) =>
-    el("div", { position: "absolute", top: n, left: n, right: n, bottom: n, display: "flex", ...rest }, ...children);
+// The two gold rules are boxes pinned by their edges: flex sizing lets a border run off the page.
+const inset = (n: number, rest: Record<string, string | number>, ...children: (Node | string)[]) =>
+  el("div", { position: "absolute", top: n, left: n, right: n, bottom: n, display: "flex", ...rest }, ...children);
+
+/** The front: the frame, a divider, the name in its accent and the line under it, the shield, the
+ *  middle line, a divider, and the foot. */
+async function draw(name: string, accent: string, head: string, tagline: string, middle: string, foot: string,
+  headSize = 62, footSize = 40) {
   const front = el("div", { width: W, height: H, display: "flex", position: "relative", background: PAPER },
     inset(34, { border: `5px solid ${GOLD}` }),
     inset(52, { border: `1.5px solid ${GOLD}`, flexDirection: "column", alignItems: "center",
         padding: "110px 70px 70px" },
         divider(),
-        el("div", { fontFamily: "Cinzel", fontSize: 62, letterSpacing: 6, color: c.accent, textAlign: "center",
-          lineHeight: 1.15 }, c.name.toUpperCase()),
+        el("div", { fontFamily: "Cinzel", fontSize: headSize, letterSpacing: 6, color: accent, textAlign: "center",
+          lineHeight: 1.15 }, head.toUpperCase()),
         el("div", { fontFamily: "Gelasio", fontStyle: "italic", fontSize: 32, color: SOFT, textAlign: "center",
-          lineHeight: 1.35, marginTop: 22, maxWidth: 680 }, c.tagline),
+          lineHeight: 1.35, marginTop: 22, maxWidth: 680 }, tagline),
         el("div", { flex: 1, display: "flex", alignItems: "center", justifyContent: "center" },
           { type: "img", props: { src: shield, height: 380, width: Math.round(380 * 288 / 469),
             style: { opacity: 0.9 } } }),
-        el("div", { fontFamily: "Gelasio", fontStyle: "italic", fontSize: 44, color: INK, marginBottom: 90 },
-          "Cover coming soon"),
+        el("div", { fontFamily: "Gelasio", fontStyle: "italic", fontSize: 44, color: INK, marginBottom: 90,
+          textAlign: "center" }, middle),
         divider(),
-        el("div", { fontFamily: "Cinzel", fontSize: 40, letterSpacing: 8, color: INK }, "LÉRINS PRESS")));
+        el("div", { fontFamily: "Cinzel", fontSize: footSize, letterSpacing: footSize / 5, color: INK,
+          textAlign: "center" }, foot.toUpperCase())));
   const svg = await satori(front as never, { width: W, height: H, fonts });
   const png = new Resvg(svg, { fitTo: { mode: "width", value: W }, font: { loadSystemFonts: false } }).render().asPng();
   writeFileSync(join(ROOT, "content/covers", `${name}.png`), png);
   console.log(`drew ${name}.png`);
 }
+
+for (const c of [...press.collections, press.originals]) {
+  const name = `soon-${c.slug}`;
+  if (!wanted.has(name)) continue;
+  await draw(name, c.accent, c.name, c.tagline, "Cover coming soon", "LÉRINS PRESS");
+}
+
+for (const r of press.bibles.items)
+  await draw(r.cover, CRIMSON, r.title, r.subtitle ?? "", r.buy.map(b => b.format).join(" · "), "Image currently unavailable", 54, 30);
