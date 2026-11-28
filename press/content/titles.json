@@ -4911,6 +4911,78 @@
     ]
   },
   {
+    "slug": "be-always-sure-youre-right",
+    "title": "Be Always Sure You’re Right, Then Go Ahead",
+    "subtitle": "Volume 2: Crockett, the Alamo, Kit Carson and the Overland Trail, 1810–1852",
+    "author": "David Crockett, Black Hawk, Kit Carson and Others",
+    "format": "Paperback",
+    "listed": "2026-11-27",
+    "cover": "be-always-sure-youre-right",
+    "collection": {
+      "slug": "lerins-america",
+      "no": 51,
+      "part": "frontier"
+    },
+    "lead": [
+      "David Crockett’s Narrative of his life, Black Hawk’s own story, Travis’s letter from the Alamo, Kit Carson’s dictated memoir, and the pioneers of the Oregon Trail, the Donner Party and the California mines."
+    ],
+    "description": [
+      "This volume carries the American frontier from the Wabash to the Pacific. It opens at Vincennes in 1810, where Governor William Henry Harrison set down Tecumseh’s warning about the land in the record of their council, and at Chicago in 1812, with the Kinzie family’s account of the evacuation of Fort Dearborn and the fight on the lake shore. At its centre stands David Crockett’s Narrative of 1834, whole: the backwoods boy who ran away from home, the mounted rifleman of the Creek War, the bear hunter of the West Tennessee canebrakes, and the congressman who lived by the motto on his title page, ’Be always sure you’re right, then go ahead!'",
+      "The Black Hawk War of 1832 is told by Black Hawk himself, as he dictated it after his surrender, at the point in the story where the settlers of Illinois met him. Texas speaks in Travis’s letter from the Alamo, ’I shall never surrender or retreat’, in Sam Houston’s report of San Jacinto with its war cry of ’Remember the Alamo!', and in Rachel Plummer’s narrative of her capture at Parker’s Fort and her twenty-one months among the Comanches. Kit Carson tells his own life as a trapper, guide and soldier in the mountains. Jesse Applegate rides a day with the cow column of 1843 on the way to Oregon, Virginia Reed remembers the Donner Party, and Dame Shirley writes home from the gold diggings at Rich Bar.",
+      "Every piece is printed whole, from its first edition or from the edition that first printed the author’s own text, with the spelling and the plain speech of the frontier kept. The Editors of the Mere Catholicity Project add an introduction that sets each account in its place on the moving frontier, from the Ohio country to California, and notes on the people, places, rifles and tools, forts and trails, Indian nations and words of the time, with a glossary of frontier terms and an index of names and places. It is the second of three volumes of The Frontier in Their Own Words."
+    ],
+    "contents": [
+      {
+        "items": [
+          "Introduction",
+          "A Note on the Text"
+        ]
+      },
+      {
+        "part": "Part I. Tecumseh at Vincennes and the War of 1812 in the West",
+        "items": [
+          "Letter to the Secretary of War, with Tecumseh’s Speeches at Vincennes, William Henry Harrison and Tecumseh (August 1810)",
+          "Narrative of the Massacre at Chicago, Juliette Kinzie (1844)"
+        ]
+      },
+      {
+        "part": "Part II. 'Go Ahead'",
+        "items": [
+          "A Narrative of the Life of David Crockett, of the State of Tennessee, written by himself (1834)"
+        ]
+      },
+      {
+        "part": "Part III. The Black Hawk War",
+        "items": [
+          "Life of Ma-ka-tai-me-she-kia-kiak or Black Hawk, dictated by himself (1833)"
+        ]
+      },
+      {
+        "part": "Part IV. Texas, 1836",
+        "items": [
+          "To the People of Texas and All Americans in the World, William Barret Travis (24 February 1836)",
+          "Report of the Battle of San Jacinto, Sam Houston (25 April 1836)",
+          "Narrative of the Capture and Sufferings of Mrs. Rachel Plummer, written by herself (1838)"
+        ]
+      },
+      {
+        "part": "Part V. The Mountains, the Trail and the Diggings",
+        "items": [
+          "Kit Carson’s Own Story of His Life (dictated 1856-1857)",
+          "A Day with the Cow Column in 1843, Jesse Applegate",
+          "Across the Plains in the Donner Party, Virginia Reed Murphy (1891)",
+          "The Shirley Letters from the California Mines, the First and Second Letters, Louise Clappe (1851)"
+        ]
+      },
+      {
+        "items": [
+          "Glossary",
+          "Index"
+        ]
+      }
+    ]
+  },
+  {
     "slug": "the-reformed-catholic-reader-1",
     "title": "The Reformed Catholic Reader, Volume I",
     "subtitle": "Calvin on the Church, Baptism, and the Supper",
