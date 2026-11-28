@@ -39,7 +39,7 @@ class InjectSupport(unittest.TestCase):
     def test_only_the_summa_box_is_an_amazon_link(self):
         # the others open the press's own pages, whose Amazon links carry the tag
         for box in m.PAGES.values():
-            if box is m.SUMMA or box is m.NEWMAN:
+            if any(box is a for a in m.AFFILIATE):
                 continue
             self.assertNotIn('amazon.com', box)
             self.assertNotIn('tag=', box)
@@ -64,7 +64,13 @@ class InjectSupport(unittest.TestCase):
         self.assertGreater(len(pages), 50)
         self.assertIn('development.html', pages)
         for page in pages:
-            self.assertIs(m.PAGES[page], m.NEWMAN, page)
+            self.assertIs(m.PAGES[page], m.NEWMAN_OWN.get(page, m.NEWMAN), page)
+        self.assertIn('dp/0140433740?', m.PAGES['apologia.html'])
+        self.assertIn('dp/0268010005?', m.PAGES['grammar.html'])
+        for box in m.AFFILIATE:
+            self.assertIn('tag=lerinspress-20', box)
+            self.assertIn('rel="sponsored noopener"', box)
+            self.assertIn('Affiliate link. As an Amazon Associate we earn from qualifying purchases.', box)
         self.assertIn('https://www.amazon.com/dp/026800921X?', m.NEWMAN)
         self.assertIn('tag=lerinspress-20', m.NEWMAN)
         self.assertIn('rel="sponsored noopener"', m.NEWMAN)

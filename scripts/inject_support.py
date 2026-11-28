@@ -17,7 +17,9 @@ Two kinds of box, both after the page's title block:
   the same box by hand (content/library.html).
 - THE NEWMAN BOX on every work the Library's Newman shelf links (read from
   content/library.html's #newman section, so a new work joins by being shelved): the
-  same affiliate box, its button the Essay on the Development of Christian Doctrine.
+  same affiliate box, its button the Essay on the Development of Christian Doctrine,
+  save where a work is sold in its own good edition (NEWMAN_OWN: the Apologia, the
+  Grammar of Assent), which carries that book.
   The Library's Newman view carries it by hand.
 - THE EDITION CARD on a work the press prints (the Catena Aurea): the press's shield,
   its name in Cinzel, the work's own line, and a link to its page on the press's site
@@ -79,6 +81,38 @@ every one.</p>
 </aside>'''
 
 
+
+def affiliate(words, label, asin, link_id):
+    """The thanks box with its button an Amazon affiliate link (a SiteStripe link, kept to its
+    ASIN, tag and linkId), marked as one and carrying Amazon's disclosure."""
+    url = (f'https://www.amazon.com/dp/{asin}?linkCode=ll2&amp;tag=lerinspress-20&amp;'
+           f'linkId={link_id}&amp;language=en_US&amp;ref_=as_li_ss_tl')
+    return f'''<aside class="mc-support" aria-label="Help support the Mere Catholicity Project">
+<p class="mc-support-heart" aria-hidden="true">&hearts;</p>
+<p class="mc-support-head">With our thanks</p>
+<p>{words} The link below is an Amazon affiliate link: when you buy through it,
+Amazon pays a small commission, <strong>at no extra cost to you, and it helps
+support the Mere Catholicity Project.</strong> We are grateful for every one.</p>
+<p class="mc-support-go"><a href="{url}" rel="sponsored noopener">{label}</a></p>
+<p class="mc-support-note">Affiliate link. As an Amazon Associate we earn from qualifying purchases.</p>
+</aside>'''
+
+
+# A Newman work sold in its own good edition carries that book instead of the Essay.
+NEWMAN_OWN = {
+    'apologia.html': affiliate(
+        'Would you like the <em>Apologia</em> in print? The Penguin Classics edition, edited '
+        'with an introduction by Ian Ker, is in paperback.',
+        'Buy the Apologia on Amazon (Paperback)', '0140433740', 'c0a438ed64b54cb484072f14119d589c'),
+    'grammar.html': affiliate(
+        'Would you like the <em>Grammar of Assent</em> in print? The University of Notre Dame '
+        'Press keeps it in paperback, with an introduction by Nicholas Lash.',
+        'Buy the Grammar of Assent on Amazon (Paperback)', '0268010005',
+        '6aeb541c97e4602a56c62e0dbf860734'),
+}
+AFFILIATE = [SUMMA, NEWMAN, *NEWMAN_OWN.values()]
+
+
 def edition(title, shelf, no, slug):
     """The card for a work the press prints: its shield, its name, the work's line, a way in."""
     return f'''<aside class="mc-edition" aria-label="The Lérins Press edition">
@@ -114,7 +148,7 @@ def newman_pages(library=os.path.join(ROOT, 'content', 'library.html')):
 
 
 for _page in newman_pages():
-    PAGES.setdefault(_page, NEWMAN)
+    PAGES.setdefault(_page, NEWMAN_OWN.get(_page, NEWMAN))
 
 
 def inject(html, box):
