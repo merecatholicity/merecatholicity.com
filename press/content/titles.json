@@ -4617,6 +4617,56 @@
     ]
   },
   {
+    "slug": "loyalist-soldiers",
+    "title": "Loyalist Soldiers and the War",
+    "subtitle": "Volume 3: Simcoe of the Queen’s Rangers, James Moody, David Fanning and Alexander Chesney, 1776–1783",
+    "author": "Loyalist Soldiers",
+    "format": "Paperback",
+    "listed": "2026-11-27",
+    "cover": "loyalist-soldiers",
+    "collection": {
+      "slug": "lerins-america",
+      "no": 47,
+      "part": "loyalists"
+    },
+    "lead": [
+      "The Loyalist soldier’s war in his own words, 1776 to 1783: John Graves Simcoe’s Journal of the Operations of the Queen’s Rangers, whole with its appendix, and the narratives of James Moody of New Jersey, David Fanning of North Carolina and Alexander Chesney of South Carolina."
+    ],
+    "description": [
+      "Thousands of Americans fought for the King, in provincial regiments raised in the colonies, as scouts and spies, and as partisans in a backcountry war of neighbour against neighbour. The Queen’s Rangers were the best known of their corps, and John Graves Simcoe, who commanded them from 1777 to the surrender at Yorktown, printed their history in 1787 for his friends: the skirmishes around Philadelphia, the raids in New Jersey, the posts on the Hudson and the campaign in Virginia, with the orders and letters that bear it out. Printed here whole with its appendix, it is the fullest record by the commander of a Loyalist corps. Simcoe went on to be the first lieutenant governor of Upper Canada, where the Loyalists made new homes. Simcoe was English born and a regular officer, but his men were Americans, raised in New York, New Jersey, Pennsylvania and Connecticut. His book was rare from the start and was reprinted in New York in 1844.",
+      "Three men of the colonies follow. James Moody, a New Jersey farmer driven from his land in 1777, turned raider and dispatch carrier for the British, escaped from a Continental prison, and printed his Narrative in London in 1783 with the testimonies of the officers he served. David Fanning, the most feared Loyalist partisan of North Carolina, who took the governor prisoner at Hillsborough in 1781, wrote his narrative in Nova Scotia, and it was first printed in 1861. Alexander Chesney of the South Carolina backcountry served under Major Ferguson at Kings Mountain, was taken prisoner, and lived out his life in Ireland, where he wrote the journal printed from his manuscript in 1921. Moody wrote in part to support his claim for what he had lost, and all three tell of a war between neighbours that the armies seldom saw. Fanning’s and Chesney’s accounts waited many years for print. Moody and Fanning both ended their days in Nova Scotia.",
+      "This is the third volume of The Loyalists in Their Own Words. It faces Patriot Soldiers and the War, where Joseph Plumb Martin, Ethan Allen and John Joseph Henry tell the same war from the American side, at Yorktown and Quebec and on the roads of New Jersey. Each narrative is printed whole from its first edition, with its authors’ own appendices. The Editors of the Mere Catholicity Project add an introduction on the authors, their corps and what became of them, and headnotes that place each chapter in the war. Notes explain the people, places, regiments, ranks and old words the reader meets, and a glossary and an index close the volume. The two volumes meet at Yorktown, where Simcoe’s Rangers held Gloucester across the river from the trenches Martin dug, and in the raids and outpost fighting of New Jersey and the Hudson. Where the authors write of killings on either side, their words are printed as they stand, with notes that explain and do not judge."
+    ],
+    "contents": [
+      {
+        "items": [
+          "Introduction",
+          "A Note on the Text"
+        ]
+      },
+      {
+        "part": "Part One. The Queen's Rangers, 1777-1781",
+        "items": [
+          "John Graves Simcoe, A Journal of the Operations of the Queen’s Rangers, with the Appendix (1787)"
+        ]
+      },
+      {
+        "part": "Part Two. Partisans and Spies, 1776-1783",
+        "items": [
+          "James Moody, Lieut. James Moody’s Narrative of His Exertions and Sufferings, with the Appendix (1783)",
+          "David Fanning, The Narrative of Colonel David Fanning (written c. 1790)",
+          "Alexander Chesney, The Journal of Alexander Chesney (written c. 1820)"
+        ]
+      },
+      {
+        "items": [
+          "Glossary",
+          "Index"
+        ]
+      }
+    ]
+  },
+  {
     "slug": "the-reformed-catholic-reader-1",
     "title": "The Reformed Catholic Reader, Volume I",
     "subtitle": "Calvin on the Church, Baptism, and the Supper",
