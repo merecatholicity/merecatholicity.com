@@ -4464,6 +4464,84 @@
     ]
   },
   {
+    "slug": "loyalist-pamphlets",
+    "title": "Loyalist Pamphlets and State Papers",
+    "subtitle": "Volume 1: Hutchinson, the Westchester Farmer, Galloway, Massachusettensis and Inglis, 1773–1776",
+    "author": "Loyalist Statesmen and Writers",
+    "format": "Paperback",
+    "listed": "2026-11-27",
+    "cover": "loyalist-pamphlets",
+    "collection": {
+      "slug": "lerins-america",
+      "no": 45,
+      "part": "loyalists"
+    },
+    "lead": [
+      "The Loyalist case in its own words, 1773 to 1776: Governor Hutchinson’s speeches to the General Court, Samuel Seabury’s four Westchester Farmer pamphlets, Chandler’s Friendly Address, Galloway’s Candid Examination with his Plan of Union, Daniel Leonard’s Massachusettensis, Inglis’s answer to Common Sense and Hutchinson’s Strictures on the Declaration of Independence."
+    ],
+    "description": [
+      "Not every American wanted independence, and many of those who did not were men of learning and standing who said why in print, under their own names or under a pen name, while it was still dangerous to do so. This volume gives their side of the argument in their own words. It opens in January 1773 with Governor Thomas Hutchinson telling the Massachusetts General Court that he knew “of no line that can be drawn between the supreme authority of Parliament and the total independence of the colonies.” It goes on to the Westchester Farmer, the Anglican rector Samuel Seabury, whose four pamphlets of 1774 and 1775 spoke to the farmers, merchants and assembly of New York against the Congress and its committees: “If I must be enslaved, let it be by a KING at least, and not by a parcel of upstart lawless Committee-men.” Seabury was seized by Connecticut men in November 1775 and held for weeks at New Haven, and the press of his printer, James Rivington, was wrecked.",
+      "Thomas Bradbury Chandler’s Friendly Address weighs what a war would cost. Joseph Galloway of Pennsylvania prints the Plan of Union he laid before the First Continental Congress, which the Congress first debated and then struck from its minutes, and defends it against a critic. Daniel Leonard of Taunton, writing as Massachusettensis in seventeen letters, makes the most careful case of all for Parliament and the Crown, the case John Adams answered as Novanglus. In 1776 Charles Inglis of Trinity Church answered Common Sense in The True Interest of America, and the exiled Hutchinson went through the Declaration of Independence charge by charge in his Strictures, asking how its authors could speak of liberty and hold slaves. It was the question the Patriot side was asked most often, and it is printed as he wrote it. In time Galloway and Leonard went to England, and Inglis became the first bishop of Nova Scotia.",
+      "This is the first volume of The Loyalists in Their Own Words, and it faces the first volume of The Patriots in Their Own Words, where Dickinson, Hamilton, Adams and the Continental Congress make the other case, so that each pamphlet can be read beside the one that answers it. Each piece is printed whole from its first printing or the edition of record. The Editors of the Mere Catholicity Project add an introduction on the authors, their fortunes in the war and after, and a headnote to each piece naming the writing it answers. Notes explain the people, places, offices, statutes and old words the reader meets, and a glossary and an index close the volume. Where a piece quotes its opponent, the note gives the page of the facing volume where the passage stands. Nothing printed elsewhere in this series is printed again: Common Sense and the Declaration of Independence, which Inglis and Hutchinson answer, have volumes of their own."
+    ],
+    "contents": [
+      {
+        "items": [
+          "Introduction",
+          "A Note on the Text"
+        ]
+      },
+      {
+        "part": "Part One. The Governor and the Assembly, 1773",
+        "items": [
+          "Thomas Hutchinson, Speech to the Two Houses (6 January 1773)",
+          "Thomas Hutchinson, Speech to Both Houses (16 February 1773)"
+        ]
+      },
+      {
+        "part": "Part Two. The Westchester Farmer, 1774-1775",
+        "items": [
+          "Samuel Seabury, Free Thoughts on the Proceedings of the Continental Congress (1774)",
+          "Samuel Seabury, The Congress Canvassed (1774)",
+          "Samuel Seabury, A View of the Controversy between Great Britain and Her Colonies (1774)",
+          "Samuel Seabury, An Alarm to the Legislature of the Province of New York (1775)"
+        ]
+      },
+      {
+        "part": "Part Three. A Friendly Address, 1774",
+        "items": [
+          "Thomas Bradbury Chandler, A Friendly Address to All Reasonable Americans (1774)"
+        ]
+      },
+      {
+        "part": "Part Four. Galloway's Plan, 1775",
+        "items": [
+          "Joseph Galloway, A Candid Examination of the Mutual Claims of Great Britain and the Colonies, with the Plan of Union (1775)",
+          "Joseph Galloway, A Reply to an Address to the Author of A Candid Examination (1775)"
+        ]
+      },
+      {
+        "part": "Part Five. Massachusettensis, 1774-1775",
+        "items": [
+          "Daniel Leonard, Massachusettensis, Letters I-XVII (1774-1775)"
+        ]
+      },
+      {
+        "part": "Part Six. Independence Answered, 1776",
+        "items": [
+          "Charles Inglis, The True Interest of America Impartially Stated (1776)",
+          "Thomas Hutchinson, Strictures upon the Declaration of the Congress at Philadelphia (1776)"
+        ]
+      },
+      {
+        "items": [
+          "Glossary",
+          "Index"
+        ]
+      }
+    ]
+  },
+  {
     "slug": "the-reformed-catholic-reader-1",
     "title": "The Reformed Catholic Reader, Volume I",
     "subtitle": "Calvin on the Church, Baptism, and the Supper",
