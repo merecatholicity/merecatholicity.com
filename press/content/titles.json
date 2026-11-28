@@ -4279,6 +4279,73 @@
     ]
   },
   {
+    "slug": "patriot-pamphlets",
+    "title": "Patriot Pamphlets and State Papers",
+    "subtitle": "Volume 1: Dickinson, the Continental Congress, Hamilton and Novanglus, 1767–1775",
+    "author": "Patriot Statesmen and Writers",
+    "format": "Paperback",
+    "listed": "2026-11-27",
+    "cover": "patriot-pamphlets",
+    "collection": {
+      "slug": "lerins-america",
+      "no": 42,
+      "part": "patriots"
+    },
+    "lead": [
+      "The Patriot case in its own words, 1767 to 1775: Dickinson’s Letters from a Farmer in Pennsylvania, the addresses and petition of the First Continental Congress, Hamilton’s Full Vindication and The Farmer Refuted, Adams’s Novanglus and the Declaration of the Causes and Necessity of Taking Up Arms."
+    ],
+    "description": [
+      "Before there was a war there was an argument, and it was carried on in pamphlets, newspapers and state papers read aloud in taverns and meeting houses from Boston to Charleston. This volume gives the colonists’ side of it in the words of the men who made it. John Dickinson, a Philadelphia lawyer, wrote as a farmer in twelve letters against the Townshend duties in 1767 and 1768: “Let these truths be indelibly impressed on our minds, that we cannot be HAPPY, without being FREE.” The First Continental Congress followed in the autumn of 1774 with its declaration of rights, its Association to stop all trade with Britain, its addresses to the people of Great Britain, of the colonies and of Quebec, and its petition to the King, still signed as his loyal subjects. Dickinson wrote as a loyal subject who wanted the old relation with Britain restored, and his letters were reprinted in nearly every colonial newspaper, in London, and in a French translation.",
+      "Then come two young men answering two Loyalists. Alexander Hamilton, a student at King’s College of nineteen, answered the Westchester Farmer twice, in A Full Vindication of the Measures of the Congress and The Farmer Refuted, where he wrote that the sacred rights of mankind “are written, as with a sun beam, in the whole volume of human nature.” John Adams, back from the Congress, answered the Massachusetts writer who signed himself Massachusettensis in twelve long letters as Novanglus, tracing the dispute back through the charters, and kept the preface he wrote for their collected edition of 1819. The volume closes in July 1775, after Lexington and Bunker Hill, with the Congress’s Declaration of the Causes and Necessity of Taking Up Arms: “Our cause is just. Our union is perfect.” Massachusettensis is printed whole in the facing volume, so each of Adams’s letters can be set beside the one it answers. The two lawyers argued the case in the Boston newspapers through the winter, until the shooting began.",
+      "This is the first volume of The Patriots in Their Own Words, and it faces the first volume of The Loyalists in Their Own Words, where the Westchester Farmer, Massachusettensis, Galloway, Inglis and Governor Hutchinson make the other case. Each piece is printed whole, from the edition its first readers had or the government’s own printing of the Journals of Congress. The Editors of the Mere Catholicity Project add an introduction on the authors and the controversy, and a headnote to each piece naming the writing it answers. Notes explain the people, places, offices, statutes and old words the reader meets, and a glossary and an index close the volume. Where a piece quotes its opponent, the note gives the page of the facing volume where the passage stands. Nothing printed elsewhere in this series is printed again: Common Sense and the Declaration of Independence have volumes of their own in the series."
+    ],
+    "contents": [
+      {
+        "items": [
+          "Introduction",
+          "A Note on the Text"
+        ]
+      },
+      {
+        "part": "Part One. The Farmer's Letters, 1767-1768",
+        "items": [
+          "John Dickinson, Letters from a Farmer in Pennsylvania (1767-1768)"
+        ]
+      },
+      {
+        "part": "Part Two. The First Continental Congress, 1774",
+        "items": [
+          "The Declaration and Resolves of the First Continental Congress (14 October 1774)",
+          "The Continental Association (20 October 1774)",
+          "To the People of Great Britain (21 October 1774)",
+          "To the Inhabitants of the Colonies (21 October 1774)",
+          "To the Inhabitants of the Province of Quebec (26 October 1774)",
+          "The Petition to the King (26 October 1774)"
+        ]
+      },
+      {
+        "part": "Part Three. The Farmer Refuted, 1774-1775",
+        "items": [
+          "Alexander Hamilton, A Full Vindication of the Measures of the Congress (1774)",
+          "Alexander Hamilton, The Farmer Refuted (1775)"
+        ]
+      },
+      {
+        "part": "Part Four. Novanglus, 1775",
+        "items": [
+          "John Adams, Novanglus, Letters I-XII, with the Preface of 1819 (1775)",
+          "The Declaration of the Causes and Necessity of Taking Up Arms (6 July 1775)"
+        ]
+      },
+      {
+        "items": [
+          "Glossary",
+          "Index"
+        ]
+      }
+    ]
+  },
+  {
     "slug": "the-reformed-catholic-reader-1",
     "title": "The Reformed Catholic Reader, Volume I",
     "subtitle": "Calvin on the Church, Baptism, and the Supper",
