@@ -5141,6 +5141,64 @@
     ]
   },
   {
+    "slug": "lincoln-douglas-debates",
+    "title": "The Lincoln-Douglas Debates",
+    "subtitle": "Political Debates in the Celebrated Campaign of 1858, in Illinois",
+    "author": "Abraham Lincoln and Stephen A. Douglas",
+    "format": "Paperback",
+    "listed": "2026-11-27",
+    "cover": "lincoln-douglas-debates",
+    "collection": {
+      "slug": "lerins-america",
+      "no": 55,
+      "part": "union"
+    },
+    "lead": [
+      "The seven joint debates of Abraham Lincoln and Stephen A. Douglas in the Illinois Senate campaign of 1858, whole, with the speeches at Springfield and Chicago that opened the campaign and the letters that arranged the debates, from the Columbus edition of 1860 that Lincoln prepared."
+    ],
+    "description": [
+      "On June 16, 1858, the Republicans of Illinois, met at Springfield, named Abraham Lincoln their choice for the United States Senate seat held by Stephen A. Douglas, and that evening Lincoln told them, \"A house divided against itself cannot stand. I believe this government cannot endure permanently half slave and half free.\" Douglas opened his canvass at Chicago on July 9, and Lincoln answered him there the next evening. On July 24 Lincoln proposed a joint canvass, and the two men agreed to meet seven times, once in each Congressional district but the two where both had already spoken. They met at Ottawa on August 21, at Freeport on August 27, at Jonesboro on September 15, at Charleston on September 18, at Galesburgh on October 7, at Quincy on October 13 and at Alton on October 15. At each meeting one spoke for an hour, the other replied for an hour and a half, and the first closed for half an hour. The legislature chosen that November returned Douglas to the Senate.",
+      "The debates turned on slavery in the territories, the Dred Scott decision, popular sovereignty and the meaning of the Declaration of Independence. At Ottawa Douglas put seven questions on the Republican platform, and at Freeport Lincoln answered them and put four of his own. Douglas’s reply, that slavery \"cannot exist a day or an hour anywhere, unless it is supported by local police regulations,\" became known as the Freeport doctrine. Both men spoke plainly on race and equality, Douglas holding that \"this government of ours is founded on the white basis,\" and Lincoln saying at Charleston that he was not \"in favor of bringing about in any way the social and political equality of the white and black races.\" At Alton Lincoln called the question between them \"the eternal struggle between these two principles, right and wrong, throughout the world.\" The crowds’ cheers and interruptions stand in the text as the reporters took them down.",
+      "In December 1859 the Republican committee of Ohio asked Lincoln for the debates, and he sent the reports \"as reported and printed, by the respective friends of Senator Douglas and myself, at the time,\" asking that the reprint be \"precisely as the copies I send, without any comment whatever.\" Follett, Foster and Company of Columbus published them in 1860. This edition prints from that volume the Ohio letters, the House Divided speech, the Chicago speeches of July 9 and 10, the letters arranging the debates, and all seven debates whole, with the two extracts printed after the Charleston debate. The Editors of the Mere Catholicity Project add an introduction on the two men and the campaign, and notes that explain the persons, places, laws, court cases, votes and old words of the text, with a glossary and an index. Lincoln’s own two speeches in Ohio of 1859, which the 1860 volume adds after the debates, are left for another book. This one stands as a single work beside The Union in Their Own Words."
+    ],
+    "contents": [
+      {
+        "items": [
+          "Introduction",
+          "A Note on the Text",
+          "Correspondence: The Ohio Republican Committee to Abraham Lincoln, and His Reply (December 1859)"
+        ]
+      },
+      {
+        "part": "Part One. The Campaign Opens",
+        "items": [
+          "Speech of Mr. Lincoln at Springfield (June 16, 1858)",
+          "Speech of Senator Douglas at Chicago (July 9, 1858)",
+          "Speech of Mr. Lincoln at Chicago (July 10, 1858)",
+          "Correspondence between Messrs. Lincoln and Douglas, Preliminary to the Debates (July 24-31, 1858)"
+        ]
+      },
+      {
+        "part": "Part Two. The Seven Joint Debates",
+        "items": [
+          "First Joint Debate, at Ottawa (August 21, 1858)",
+          "Second Joint Debate, at Freeport (August 27, 1858)",
+          "Third Joint Debate, at Jonesboro (September 15, 1858)",
+          "Fourth Joint Debate, at Charleston (September 18, 1858), with the Extracts from Mr. Trumbull’s Speech at Alton and Mr. Douglas’s Speech at Jacksonville",
+          "Fifth Joint Debate, at Galesburgh (October 7, 1858)",
+          "Sixth Joint Debate, at Quincy (October 13, 1858)",
+          "Seventh and Last Joint Debate, at Alton (October 15, 1858)"
+        ]
+      },
+      {
+        "items": [
+          "Glossary",
+          "Index"
+        ]
+      }
+    ]
+  },
+  {
     "slug": "the-reformed-catholic-reader-1",
     "title": "The Reformed Catholic Reader, Volume I",
     "subtitle": "Calvin on the Church, Baptism, and the Supper",
