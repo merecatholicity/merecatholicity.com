@@ -4756,6 +4756,91 @@
     ]
   },
   {
+    "slug": "times-of-refreshing",
+    "title": "Times of Refreshing",
+    "subtitle": "The Second Great Awakening: The Reformed Witness, 1797–1847",
+    "author": "Nettleton, Beecher, Finney, Hodge and Others",
+    "format": "Paperback",
+    "listed": "2026-11-27",
+    "cover": "times-of-refreshing",
+    "collection": {
+      "slug": "lerins-america",
+      "no": 49,
+      "part": "revival"
+    },
+    "lead": [
+      "The New England revivals of 1797-1812, the Kentucky camp meetings and Cane Ridge, Charles G. Finney in his own words, and the Reformed answer to his new measures, from the Beecher-Nettleton Letters (1828) and Sprague’s Lectures on Revivals (1832) to Albert Dod’s review of Finney’s Lectures (1835) and Charles Hodge’s review of his Systematic Theology (1847)."
+    ],
+    "description": [
+      "In February 1797 a quiet revival began in Somers, Connecticut, and within five or six years, as Bennet Tyler counted, not less than one hundred and fifty churches in New England were visited with “times of refreshing from the presence of the Lord.” In Kentucky the same years brought the sacramental meetings at Gasper River and Cane Ridge, where thousands camped in the woods and many fell to the ground. A generation later Charles Grandison Finney, a young lawyer converted in 1821, carried the revival through western New York and on to Rochester with the “new measures”: the protracted meeting, the anxious seat and the call to decide on the spot. Asahel Nettleton and Lyman Beecher wrote against the measures in 1827, the Princeton Review answered Finney’s Lectures on Revivals in 1835, the Presbyterian General Assembly testified against sixteen doctrinal errors in 1837 and the church divided, and in 1847 Charles Hodge reviewed Finney’s Lectures on Systematic Theology.",
+      "Part One gives Tyler’s preface to New England Revivals and the pastors’ own narratives from Somers, New Hartford and South Britain, with Jeremiah Day on the revivals at Yale under Timothy Dwight. Part Two goes west: James M’Gready’s letter from Logan County (1801), the General Assembly’s narratives of 1801 and 1802, Barton W. Stone’s chapters on Cane Ridge and the bodily exercises, Moses Waddel’s first camp meeting in 1802 and David Rice’s Epistle to the Citizens of Kentucky (1805). Part Three is Finney as he wrote and preached: his Memoirs on his conversion, his doctrinal education and the Rochester revival of 1830, the sermon Sinners Bound to Change Their Own Hearts, and Lectures I and XIV of his Lectures on Revivals of Religion. Part Four is the answer: the Letters of Beecher and Nettleton on the New Measures (1828), the first of William B. Sprague’s Lectures on Revivals (1832) with letters from Archibald Alexander and Edward D. Griffin, Albert B. Dod’s review of Finney’s Lectures, the Assembly’s testimonies of 1837 and a chapter of Alexander’s Thoughts on Religious Experience (1841). Hodge’s review closes the book.",
+      "This volume of Lérins America, opening its section on the Second Great Awakening, prints each piece whole from its edition of record: Tyler’s New England Revivals (1846), Sprague’s Lectures (1832), the Assembly’s Extracts (1803) and Baird’s Collection (1856), M’Gready’s Posthumous Works (1837), Stone’s Biography (1847), Bishop’s Outline of the History of the Church in Kentucky (1824), the Letters of 1828, Finney’s Sermons on Various Subjects (1834), his Lectures on Revivals as printed in 1835 and his Memoirs as first published in 1876, the Biblical Repertory of 1835 and 1847, and Alexander’s Thoughts (1841). The Editors of the Mere Catholicity Project add an introduction on the revivals and the men who led and weighed them, and notes explaining persons, places, words, events and points of doctrine, with a glossary and an index. John W. Nevin’s The Anxious Bench (1844), the Mercersburg answer to the new measures, is printed whole in No. 3 of Lérins Reformation and is not repeated here."
+    ],
+    "contents": [
+      {
+        "items": [
+          "Introduction",
+          "A Note on the Text"
+        ]
+      },
+      {
+        "part": "Part I. The Sober Revival: New England, 1797-1812",
+        "items": [
+          "Preface to New England Revivals, Bennet Tyler (1846)",
+          "A Revival of Religion in Somers, Connecticut, in 1797, Charles Backus",
+          "A Revival of Religion in New Hartford, Connecticut, in 1798 and 1799, Edward D. Griffin",
+          "On the Revivals in Yale College, Jeremiah Day (1832)",
+          "A Revival of Religion in South Britain, Connecticut, in 1812, Bennet Tyler"
+        ]
+      },
+      {
+        "part": "Part II. The Camp Meetings: Kentucky and the South, 1800-1805",
+        "items": [
+          "Narrative of the Revival of 1800 in Logan County, James M’Gready (1801)",
+          "Narratives of the State of Religion, the General Assembly of the Presbyterian Church (1801 and 1802)",
+          "Cane Ridge and the Religious Exercises, from his Biography, Barton W. Stone (1847)",
+          "On the Revivals in Georgia and South Carolina, Moses Waddel (1832)",
+          "An Epistle to the Citizens of Kentucky, David Rice (1805)"
+        ]
+      },
+      {
+        "part": "Part III. Finney in His Own Words, 1821-1835",
+        "items": [
+          "Conversion to Christ, from his Memoirs, Charles G. Finney (1876)",
+          "His Doctrinal Education, from his Memoirs, Charles G. Finney (1876)",
+          "Revival in Rochester, 1830, from his Memoirs, Charles G. Finney (1876)",
+          "Sinners Bound to Change Their Own Hearts, Charles G. Finney (1834)",
+          "What a Revival of Religion Is, Lectures on Revivals I, Charles G. Finney (1835)",
+          "Measures to Promote Revivals, Lectures on Revivals XIV, Charles G. Finney (1835)"
+        ]
+      },
+      {
+        "part": "Part IV. The Reformed Answer, 1827-1841",
+        "items": [
+          "Letters on the “New Measures,” Asahel Nettleton, Lyman Beecher and Others (1827-1828)",
+          "Nature of a Revival, Lectures on Revivals I, William B. Sprague (1832)",
+          "On Revivals, a Letter, Archibald Alexander (1832)",
+          "On Revivals and the New Measures, a Letter, Edward D. Griffin (1832)",
+          "Review of Finney’s Lectures on Revivals, Albert B. Dod (1835)",
+          "Testimonies against Disorders and Doctrinal Errors, the General Assembly of the Presbyterian Church (1837)",
+          "Effect of Sympathy, from Thoughts on Religious Experience, Archibald Alexander (1841)"
+        ]
+      },
+      {
+        "part": "Part V. The Last Word: Charles Hodge, 1847",
+        "items": [
+          "Finney’s Lectures on Theology, Charles Hodge (1847)"
+        ]
+      },
+      {
+        "items": [
+          "Glossary",
+          "Index"
+        ]
+      }
+    ]
+  },
+  {
     "slug": "the-reformed-catholic-reader-1",
     "title": "The Reformed Catholic Reader, Volume I",
     "subtitle": "Calvin on the Church, Baptism, and the Supper",
