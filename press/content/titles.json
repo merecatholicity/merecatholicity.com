@@ -4346,6 +4346,75 @@
     ]
   },
   {
+    "slug": "patriot-pulpit",
+    "title": "The Patriot Pulpit",
+    "subtitle": "Volume 2: Whitefield’s Heirs, Mayhew, Witherspoon and the Answer to Wesley, 1740–1777",
+    "author": "Whitefield and the Patriot Clergy",
+    "format": "Paperback",
+    "listed": "2026-11-27",
+    "cover": "patriot-pulpit",
+    "collection": {
+      "slug": "lerins-america",
+      "no": 43,
+      "part": "patriots"
+    },
+    "lead": [
+      "The pulpit of the American cause, 1740 to 1777, framed by the quarrel of Whitefield and Wesley: Whitefield’s Letter to Wesley on free grace, Mayhew’s Discourse Concerning Unlimited Submission, the Newburyport sermon at Whitefield’s grave, Caleb Evans’s and Toplady’s answers to Wesley’s Calm Address, and the war sermons of Langdon, Duché, Sherwood, Witherspoon, Keteltas and Whitaker."
+    ],
+    "description": [
+      "George Whitefield died at Newburyport in Massachusetts in September 1770 and was buried under the pulpit of the Old South Presbyterian Church. He did not live to see the Revolution, but the revival he preached from Georgia to New England had made a people who heard sermons as news, and his heirs filled the American pulpits of the war. He made seven journeys to America and preached in nearly every town of the seaboard, and men who had heard him as boys were grown when the war came. This volume opens where the two great evangelists parted, with Whitefield’s Letter to the Reverend Mr. John Wesley of 1740 in answer to Wesley’s sermon Free Grace, and then follows Whitefield to his grave in Jonathan Parsons’s funeral sermon. In 1775 the officers of Arnold’s march to Quebec went down into the vault, and their chaplain, Samuel Spring, told how they cut the dead man’s collar and wristbands into pieces and divided them among themselves.",
+      "Jonathan Mayhew’s Discourse Concerning Unlimited Submission, preached in Boston in 1750 on the anniversary of the death of King Charles I, gave New England its doctrine of resistance. When John Wesley put his name to A Calm Address to Our American Colonies in 1775, the Calvinists of England answered him: Caleb Evans, the Baptist minister of Bristol, in a Letter to Wesley and a long Reply to Wesley’s defender John Fletcher, and Augustus Toplady, who showed the Calm Address had been taken from Dr. Johnson. The war sermons follow: Samuel Langdon to the Provincial Congress, Jacob Duché to the Philadelphia militia, Samuel Sherwood on the church fled into the wilderness, John Witherspoon on the Congress’s fast day of 1776, and Abraham Keteltas and Nathaniel Whitaker, preaching where Whitefield had preached. Mayhew was no friend of the revival, and his sermon stands here to show that the patriot pulpit spoke with more than one theology.",
+      "This is the second volume of The Patriots in Their Own Words. It faces The Loyalist Pulpit, where Wesley, Fletcher, Jonathan Boucher and Charles Inglis speak for the King, so that each sermon here can be read beside the one that answers it. Every sermon, letter and pamphlet is printed whole from its first printing or the edition of record, with the preachers’ own prefaces and notes. The Editors of the Mere Catholicity Project add an introduction on the two evangelists and the two pulpits, and a headnote to each piece giving the day, the place and the text. Notes explain the people, places, Scriptures, doctrines and old words the reader meets, and a glossary and an index close the volume. Where a sermon names its opponent, the note gives the page of the facing volume where that opponent speaks. The preachers’ spelling, italics and capitals are kept as their first readers saw them, and the long s is modernized."
+    ],
+    "contents": [
+      {
+        "items": [
+          "Introduction",
+          "A Note on the Text"
+        ]
+      },
+      {
+        "part": "Part One. Free Grace and the Two Evangelists, 1740-1775",
+        "items": [
+          "George Whitefield, A Letter to the Reverend Mr. John Wesley, in Answer to His Sermon Entitled Free Grace (1740)",
+          "Jonathan Parsons, To Live Is Christ, to Die Is Gain: A Funeral Sermon on the Death of George Whitefield, with the Account of His Interment (1770)",
+          "Samuel Spring at Whitefield’s Tomb, from J. T. Headley, The Chaplains and Clergy of the Revolution (1864)"
+        ]
+      },
+      {
+        "part": "Part Two. The Right of Resistance, 1750",
+        "items": [
+          "Jonathan Mayhew, A Discourse Concerning Unlimited Submission and Non-Resistance to the Higher Powers (1750)"
+        ]
+      },
+      {
+        "part": "Part Three. The Answer to Mr. Wesley, 1775-1776",
+        "items": [
+          "Caleb Evans, A Letter to the Rev. Mr. John Wesley, Occasioned by His Calm Address (1775)",
+          "Augustus Toplady, An Old Fox Tarr’d and Feather’d (1775)",
+          "Caleb Evans, A Reply to the Rev. Mr. Fletcher’s Vindication (1776)"
+        ]
+      },
+      {
+        "part": "Part Four. The Pulpit and the War, 1775-1777",
+        "items": [
+          "Samuel Langdon, Government Corrupted by Vice, and Recovered by Righteousness (1775)",
+          "Jacob Duché, The Duty of Standing Fast in Our Spiritual and Temporal Liberties (1775)",
+          "Samuel Sherwood, The Church’s Flight into the Wilderness (1776)",
+          "John Witherspoon, The Dominion of Providence over the Passions of Men, with An Address to the Natives of Scotland (1776)",
+          "Abraham Keteltas, God Arising and Pleading His People’s Cause (1777)",
+          "Nathaniel Whitaker, An Antidote against Toryism, or the Curse of Meroz (1777)"
+        ]
+      },
+      {
+        "items": [
+          "Glossary",
+          "Index"
+        ]
+      }
+    ]
+  },
+  {
     "slug": "the-reformed-catholic-reader-1",
     "title": "The Reformed Catholic Reader, Volume I",
     "subtitle": "Calvin on the Church, Baptism, and the Supper",
