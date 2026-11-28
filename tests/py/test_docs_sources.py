@@ -59,7 +59,7 @@ def buildable():
     names |= {'tweetnacl.min.js', 'lamejs.min.js', 'qr.min.js'}
     names |= {'book.html', 'bishop-presbyter.html', 'app.js', 'chrome.js', 'comments.js',
               'Mere_Catholicity_Logos.docx',
-              'style.css', 'version.json', 'pdfs.txt', 'sitemap.xml',
+              'style.css', 'support.css', 'version.json', 'pdfs.txt', 'sitemap.xml',
               'library-order.json', 'kjv.json', 'dr.json'}
     # A volume too big to serve whole is split into one page per treatise by
     # scripts/split_volumes.py, which records every part it wrote in

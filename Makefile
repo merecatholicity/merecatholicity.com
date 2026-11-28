@@ -251,6 +251,7 @@ html: fetch-sources
 	$(MAKE) -C resources html
 	python scripts/split_volumes.py
 	python scripts/inject_social.py
+	python scripts/inject_support.py
 	$(MAKE) strip-nav sync-index page-meta library-order sitemap mirrored-pdfs pdf-manifest
 # The generators above (pandoc's --css=, content.py, nav.py, the resources
 # converters) emit BARE style.css / nav.js references, so the stamp has to be
