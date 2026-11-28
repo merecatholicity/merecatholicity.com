@@ -5025,6 +5025,70 @@
     ]
   },
   {
+    "slug": "defence-of-virginia",
+    "title": "A Defence of Virginia",
+    "subtitle": "And Through Her, of the South, in Recent and Pending Contests Against the Sectional Party",
+    "author": "Robert Lewis Dabney",
+    "format": "Paperback",
+    "listed": "2026-11-27",
+    "cover": "defence-of-virginia",
+    "collection": {
+      "slug": "lerins-america",
+      "no": 53,
+      "part": "confederacy"
+    },
+    "lead": [
+      "Robert Lewis Dabney’s A Defence of Virginia of 1867, whole, with eight of his later papers on the war and the South, from his open letter to General Howard of the Freedmen’s Bureau (1865) to The True Purpose of the Civil War (1896)."
+    ],
+    "description": [
+      "Robert Lewis Dabney (1820-1898) was a Presbyterian minister of Virginia and professor of theology at Union Theological Seminary at Hampden Sidney, and in 1862 he served on the staff of General Thomas J. Jackson. He dated the preface of A Defence of Virginia at Hampden Sidney in June 1867, and E. J. Hale and Son published it in New York that year. He wrote it, he says, \"to lay this pious and filial defence upon the tomb of my murdered mother, Virginia,\" and he took Virginia, \"the oldest and greatest of the slaveholding States,\" as the type of the whole South. Its nine chapters treat the African slave trade, the legal standing of slavery in the United States, the history of emancipation, the arguments from the Old Testament and the New, the ethical argument and the economic effects of slavery, and close with his conclusion. Dabney argues from Scripture, from the laws of the colonies and the States, and from the census, and he answers the antislavery writers of the North by name.",
+      "The second part of this volume follows Dabney through the thirty years after the Defence, in eight papers he gathered into the fourth volume of his Discussions in 1897. His open letter to General O. O. Howard, chief of the Freedmen’s Bureau, appeared in October 1865. The Crimes of Philanthropy followed in The Land We Love in December 1866, and The Duty of the Hour was his commencement oration at Davidson College in June 1868. The Negro and the Common School is his letter on the public schools of Virginia, and he reviewed Henry Wilson’s History of the Rise and Fall of the Slave Power in America. Economic Effects of the Former Labor System of the Southern United States (1894) returns to the question of the Defence’s eighth chapter. The volume closes with his Memoir of a Narrative Received of Colonel John B. Baldwin, the Virginia Unionist who met Lincoln in April 1861, and its sequel, The True Purpose of the Civil War, written at Victoria, Texas, in December 1896.",
+      "Every piece is printed whole, the Defence from the New York edition of 1867 with Dabney’s preface and his own notes, and the later papers from Discussions, volume IV (1897), with the notes of first printing that volume gives them. The Editors of the Mere Catholicity Project add an introduction on Dabney, his Virginia and the course of his argument, and notes that explain the persons, places, laws, scriptures, statistics and old words of the text, with a glossary and an index. The notes give the census figures, statutes and cases he cites and the writers he answers, among them Francis Wayland of Brown University, Barnes and Channing. The book stands as a single work beside The Confederacy in Their Own Words, whose volumes on Southern religion and on the postwar years print his sermons of 1860 and 1863 and his address The New South."
+    ],
+    "contents": [
+      {
+        "items": [
+          "Introduction",
+          "A Note on the Text"
+        ]
+      },
+      {
+        "part": "A Defence of Virginia (1867)",
+        "items": [
+          "Preface",
+          "Chapter I. Introductory",
+          "Chapter II. The African Slave Trade",
+          "Chapter III. Legal Status of Slavery in the United States",
+          "Chapter IV. History of Emancipation",
+          "Chapter V. The Old Testament Argument",
+          "Chapter VI. The New Testament Argument",
+          "Chapter VII. The Ethical Argument",
+          "Chapter VIII. Economical Effects of Slavery",
+          "Chapter IX. Conclusion"
+        ]
+      },
+      {
+        "part": "Later Papers on the War and the South",
+        "items": [
+          "Letter to Major General Howard, Chief of the Freedmen’s Bureau (October 1865)",
+          "The Crimes of Philanthropy (December 1866)",
+          "The Duty of the Hour (June 1868)",
+          "The Negro and the Common School",
+          "Review of Henry Wilson’s History of the Rise and Fall of the Slave Power in America",
+          "Economic Effects of the Former Labor System of the Southern United States (1894)",
+          "Memoir of a Narrative Received of Colonel John B. Baldwin, of Staunton, Touching the Origin of the War (1876)",
+          "The True Purpose of the Civil War (December 1896)"
+        ]
+      },
+      {
+        "items": [
+          "Glossary",
+          "Index"
+        ]
+      }
+    ]
+  },
+  {
     "slug": "the-reformed-catholic-reader-1",
     "title": "The Reformed Catholic Reader, Volume I",
     "subtitle": "Calvin on the Church, Baptism, and the Supper",
