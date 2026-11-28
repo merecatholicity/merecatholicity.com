@@ -39,9 +39,10 @@
   ];
 
   function inChrome(el: Element) {          // skip site nav, the pandoc TOC, the footer
-    // .mc-parts-lead is the split index's one line about itself — not text of
-    // the work, and not something to hang a ¶ deep link on.
-    return el.closest("nav, header, footer, #TOC, .mc-parts-lead");
+    // .mc-parts-lead is the split index's one line about itself, and .mc-support
+    // and .mc-edition the doors to Lérins Press (scripts/inject_support.py): not
+    // text of the work, and not something to hang a ¶ deep link on.
+    return el.closest("nav, header, footer, #TOC, .mc-parts-lead, .mc-support, .mc-edition");
   }
   function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string): HTMLElementTagNameMap[K] { var n = document.createElement(tag); if (cls) n.className = cls; return n; }
 

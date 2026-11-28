@@ -12,7 +12,9 @@ import { LitElement, html, nothing } from 'lit';
 interface WorkLink { label: string; href: string | null; }
 interface Work { title: string; links: WorkLink[]; note: string; id: string; }
 interface Group { name: string; id: string; works: Work[]; }
-interface Cat { id: string; name: string; desc: string; groups: Group[]; _seenUl?: boolean; }
+/* `aside`: a box the category carries below its works (aside.mc-support, the door to the
+   press's recommended Bibles under Holy Scripture), shown in that category's view alone. */
+interface Cat { id: string; name: string; desc: string; groups: Group[]; aside?: Element; _seenUl?: boolean; }
 interface LibraryModel { intro: string; cats: Cat[]; }
 
 function slug(s: unknown): string {
@@ -45,6 +47,7 @@ export function parseLibrary(main: Element): LibraryModel {
       else { group = { name: el.textContent!.trim(), id: el.id || slug(el.textContent), works: [] }; cat.groups.push(group); }
       return;
     }
+    if (tag === 'ASIDE' && el.classList.contains('mc-support') && cat) { cat.aside = el; return; }
     if (tag === 'UL' && el.classList.contains('library') && cat) {
       cat._seenUl = true;
       if (!group) { group = { name: '', id: '', works: [] }; cat.groups.push(group); }
@@ -203,7 +206,8 @@ class McLibrary extends LitElement {
           ${active.desc ? html`<p class="mc-lib-intro">${active.desc}</p>` : nothing}`;
         body = html`${active.groups.map((g: Group) => html`
           ${g.name ? html`<h2 class="mc-lib-shelf" id=${g.id}>${g.name}</h2>` : nothing}
-          <div class="mc-lib-works">${g.works.map((w: Work) => this.workTpl(w))}</div>`)}`;
+          <div class="mc-lib-works">${g.works.map((w: Work) => this.workTpl(w))}</div>`)}
+          ${active.aside ?? nothing}`;
       }
     }
     return html`<div class="mc-lib">${head}${this.filterBarTpl()}${body}</div>`;
@@ -223,7 +227,7 @@ export function mountLibrary(main: Element | null) {
   node.model = model;
   /* strip the flat catalog (everything the parser consumed) and mount the app view */
   Array.prototype.slice.call(main.children).forEach(function (el: Element) {
-    if (/^(H1|H2|H3|P|UL)$/.test(el.tagName)) main.removeChild(el);
+    if (/^(H1|H2|H3|P|UL)$/.test(el.tagName) || el.matches('aside.mc-support')) main.removeChild(el);
   });
   main.insertBefore(node, main.firstChild);
 }
